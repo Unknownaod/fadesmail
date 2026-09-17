@@ -3799,34 +3799,39 @@ export default function Home() {
                     To
                   </span>
 
-                  <div className="recipient-options">
-                    {!showCc && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowCc(
-                            true
-                          )
-                        }
-                      >
-                        Cc
-                      </button>
-                    )}
+<div className="recipient-options">
+  {!showCc && (
+    <button
+      className="recipient-option"
+      type="button"
+      onClick={() => {
+        setShowCc(true);
+        setRecipientType("cc");
+        setRecipientQuery("");
+        setRecipientSuggestions([]);
+        setRecipientSuggestionsOpen(false);
+      }}
+    >
+      Cc
+    </button>
+  )}
 
-                    {!showBcc && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowBcc(
-                            true
-                          )
-                        }
-                      >
-                        Bcc
-                      </button>
-                    )}
-                  </div>
-                </div>
+  {!showBcc && (
+    <button
+      className="recipient-option"
+      type="button"
+      onClick={() => {
+        setShowBcc(true);
+        setRecipientType("bcc");
+        setRecipientQuery("");
+        setRecipientSuggestions([]);
+        setRecipientSuggestionsOpen(false);
+      }}
+    >
+      Bcc
+    </button>
+  )}
+</div>
 
                 <div
                   className={`recipient-composer ${
