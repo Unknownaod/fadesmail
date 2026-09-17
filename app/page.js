@@ -2079,7 +2079,7 @@ export default function Home() {
           <div className="auth-card">
             <div className="auth-card-top">
               <div className="auth-pill">
-                <Logo size={18} />
+                <Logo size={25} />
                 <span>
                   Fades Mail
                 </span>
