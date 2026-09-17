@@ -561,32 +561,43 @@ export default function Home() {
         }
       );
 
-      const data = await response
-        .json()
-        .catch(() => null);
+const data = await response
+  .json()
+  .catch(() => null);
 
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            "Authentication failed."
-        );
-      }
+if (!response.ok) {
+  throw new Error(
+    data?.message ||
+      data?.error ||
+      "Authentication failed."
+  );
+}
 
-      const authenticatedUser =
-        data?.user ||
-        data?.account ||
-        data;
+const authenticatedUser =
+  data?.user ||
+  data?.account ||
+  data;
 
-      setUser(authenticatedUser);
-      setAuthenticated(true);
-      setPassword("");
-      setAuthError("");
-    } catch (error) {
-      console.error(
-        "[Fades Mail] Authentication error:",
-        error
-      );
+if (
+  authMode === "signup" &&
+  data?.status === "verification_required"
+) {
+  sessionStorage.setItem(
+    "fades_mail_verification_user",
+    JSON.stringify(authenticatedUser)
+  );
+
+  setPassword("");
+  setAuthError("");
+
+  window.location.href = "/verify";
+  return;
+}
+
+setUser(authenticatedUser);
+setAuthenticated(true);
+setPassword("");
+setAuthError("");
 
       setAuthError(
         error.message ||
