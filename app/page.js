@@ -219,7 +219,7 @@ export default function Home() {
     try {
       const endpoint =
         authMode === "signin"
-          ? "/auth/signin"
+          ? "/auth/login"
           : "/auth/signup";
 
       const body =
