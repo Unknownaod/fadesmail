@@ -3551,23 +3551,13 @@ textarea:focus-visible {
   }
 }
 
-/* =========================================
-   REDUCED MOTION
-========================================= */
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-
-    transition-duration: 0.01ms !important;
-  }
+.recipient-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
-
 
 .recipient-option {
   appearance: none;
@@ -3586,8 +3576,7 @@ textarea:focus-visible {
   cursor: pointer;
   transition:
     color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease;
+    background 0.18s ease;
 }
 
 .recipient-option:hover {
@@ -3597,4 +3586,22 @@ textarea:focus-visible {
 
 .recipient-option:active {
   background: rgba(255, 255, 255, 0.1);
+}
+
+
+/* =========================================
+   REDUCED MOTION
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+
+    transition-duration: 0.01ms !important;
+  }
 }
