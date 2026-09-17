@@ -60,6 +60,13 @@ function Icon({ name, size = 18 }) {
       </>
     ),
 
+  settings: (
+    <>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-2.4v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.4 15a1.7 1.7 0 0 0-1.56-1.03H6.75v-2.4h.09A1.7 1.7 0 0 0 8.4 10a1.7 1.7 0 0 0-.34-1.88L8 8.06l1.7-1.7.06.06A1.7 1.7 0 0 0 11.64 6.1a1.7 1.7 0 0 0 1.03-1.56V4h2.4v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.03H21v2.4h-.04A1.7 1.7 0 0 0 19.4 15z" />
+   </>
+   ),
+
     star: (
       <path d="m12 3 2.78 5.63 6.22.9-4.5 4.38 1.06 6.19L12 17.18l-5.56 2.92 1.06-6.19L3 9.53l6.22-.9z" />
     ),
@@ -2326,54 +2333,69 @@ export default function Home() {
           )}
         </div>
 
-        <div className="top-actions">
-          <button
-            className="icon-button"
-            type="button"
-            title="Refresh"
-            onClick={() => {
-              loadFolders();
-              loadMessages();
-            }}
-          >
-            <Icon
-              name="refresh"
-              size={18}
-            />
-          </button>
+<div className="top-actions">
+  <button
+    className="icon-button"
+    type="button"
+    title="Refresh"
+    aria-label="Refresh"
+    onClick={() => {
+      loadFolders();
+      loadMessages();
+    }}
+  >
+    <Icon
+      name="refresh"
+      size={18}
+    />
+  </button>
 
-          <div className="account">
-            <div className="avatar avatar-logo">
-              <Logo size={25} />
-            </div>
+  <button
+    className="icon-button"
+    type="button"
+    title="Settings"
+    aria-label="Settings"
+    onClick={() => {
+      window.location.href = "/settings";
+    }}
+  >
+    <Icon
+      name="settings"
+      size={18}
+    />
+  </button>
 
-            <div className="account-info">
-              <strong>
-                {mailbox?.email ||
-                  "Fades Mail"}
-              </strong>
+  <div className="account">
+    <div className="avatar avatar-logo">
+      <Logo size={25} />
+    </div>
 
-              <span>
-                {user?.username
-                  ? `@${user.username}`
-                  : "Fades Mail"}
-              </span>
-            </div>
+    <div className="account-info">
+      <strong>
+        {mailbox?.email ||
+          "Fades Mail"}
+      </strong>
 
-            <button
-              className="logout-button"
-              type="button"
-              onClick={logout}
-              title="Sign out"
-            >
-              <Icon
-                name="logout"
-                size={17}
-              />
-            </button>
-          </div>
-        </div>
-      </header>
+      <span>
+        {user?.username
+          ? `@${user.username}`
+          : "Fades Mail"}
+      </span>
+    </div>
+
+    <button
+      className="logout-button"
+      type="button"
+      onClick={logout}
+      title="Sign out"
+    >
+      <Icon
+        name="logout"
+        size={17}
+      />
+    </button>
+  </div>
+</div>
 
       <div className="mail-layout">
         <aside
