@@ -2396,6 +2396,7 @@ export default function Home() {
     </button>
   </div>
 </div>
+</header>
 
       <div className="mail-layout">
         <aside
