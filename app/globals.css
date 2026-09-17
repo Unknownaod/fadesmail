@@ -20,6 +20,8 @@
   --glass-hover: rgba(255, 255, 255, 0.065);
 
   --danger: #ff6868;
+  --warning: #d7d7d9;
+  --success: #d9d9dc;
 
   --radius-sm: 10px;
   --radius: 15px;
@@ -1532,6 +1534,111 @@ textarea:focus-visible {
 }
 
 /* =========================================
+   BULK MESSAGE TOOLBAR
+========================================= */
+
+.bulk-toolbar {
+  max-width: 1100px;
+
+  min-height: 48px;
+
+  margin: 0 auto 10px;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 7px 10px;
+
+  border: 1px solid var(--line-strong);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.05),
+      rgba(255, 255, 255, 0.015)
+    ),
+    rgba(10, 10, 11, 0.84);
+
+  box-shadow:
+    0 15px 45px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+
+  animation: bulk-in 0.16s ease-out;
+}
+
+@keyframes bulk-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bulk-toolbar strong {
+  margin-right: 4px;
+
+  color: #cfcfd2;
+
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.bulk-toolbar button {
+  height: 31px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 0 9px;
+
+  color: #88888d;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  border: 1px solid transparent;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 600;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.bulk-toolbar button:hover {
+  color: #eee;
+
+  background: rgba(255, 255, 255, 0.055);
+
+  border-color: var(--line);
+}
+
+.bulk-toolbar button.danger:hover {
+  color: var(--danger);
+
+  background: rgba(255, 80, 80, 0.035);
+
+  border-color: rgba(255, 104, 104, 0.1);
+}
+
+.bulk-toolbar .bulk-spacer {
+  flex: 1;
+}
+
+/* =========================================
    MESSAGE LIST
 ========================================= */
 
@@ -1598,6 +1705,85 @@ textarea:focus-visible {
 .message-row.unread:hover {
   background:
     rgba(255, 255, 255, 0.065);
+}
+
+.message-row.selected {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.025)
+    );
+
+  box-shadow:
+    inset 2px 0 0 rgba(255, 255, 255, 0.55);
+}
+
+.message-row.selected:hover {
+  background:
+    rgba(255, 255, 255, 0.085);
+}
+
+.message-checkbox {
+  width: 17px;
+  height: 17px;
+
+  flex: 0 0 auto;
+
+  appearance: none;
+
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  border-radius: 5px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+
+  cursor: pointer;
+
+  position: relative;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.message-checkbox:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  transform: scale(1.04);
+}
+
+.message-checkbox:checked {
+  border-color: rgba(255, 255, 255, 0.55);
+
+  background:
+    linear-gradient(
+      145deg,
+      #f5f5f5,
+      #99999d
+    );
+}
+
+.message-checkbox:checked::after {
+  content: "";
+
+  position: absolute;
+
+  left: 4px;
+  top: 2px;
+
+  width: 5px;
+  height: 8px;
+
+  border-right: 2px solid #080808;
+  border-bottom: 2px solid #080808;
+
+  transform: rotate(42deg);
 }
 
 .row-avatar {
@@ -1873,11 +2059,13 @@ textarea:focus-visible {
 }
 
 .message-toolbar {
-  height: 74px;
+  min-height: 74px;
 
   display: flex;
   align-items: center;
   gap: 7px;
+
+  flex-wrap: wrap;
 }
 
 .toolbar-spacer {
@@ -1943,6 +2131,25 @@ textarea:focus-visible {
   border-color: rgba(255, 104, 104, 0.12);
 
   background: rgba(255, 104, 104, 0.035);
+}
+
+.toolbar-icon.spam:hover {
+  color: #ddd;
+
+  border-color: rgba(255, 255, 255, 0.11);
+
+  background:
+    rgba(255, 255, 255, 0.045);
+}
+
+.toolbar-icon.success:hover {
+  color: #fff;
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  border-color:
+    rgba(255, 255, 255, 0.11);
 }
 
 /* =========================================
@@ -2166,7 +2373,12 @@ textarea:focus-visible {
 
   width: min(650px, calc(100vw - 30px));
 
-  overflow: hidden;
+  max-height: calc(100vh - 50px);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: visible;
 
   border: 1px solid var(--line-strong);
 
@@ -2233,6 +2445,8 @@ textarea:focus-visible {
 
   background:
     rgba(255, 255, 255, 0.018);
+
+  border-radius: 18px 18px 0 0;
 }
 
 .compose-header > div {
@@ -2292,23 +2506,33 @@ textarea:focus-visible {
 }
 
 .compose-fields {
+  position: relative;
+
   padding: 5px 20px 0;
+
+  min-height: 0;
+
+  overflow: visible;
 }
 
 .compose-field {
+  position: relative;
+
   min-height: 49px;
 
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
 
   border-bottom: 1px solid var(--line);
 }
 
-.compose-field span {
+.compose-field > span {
   width: 35px;
 
   flex: 0 0 35px;
+
+  padding-top: 16px;
 
   color: #55555a;
 
@@ -2334,6 +2558,347 @@ textarea:focus-visible {
 .compose-field input::placeholder {
   color: #48484d;
 }
+
+/* =========================================
+   RECIPIENT PICKER
+========================================= */
+
+.recipient-field {
+  z-index: 20;
+}
+
+.recipient-composer {
+  position: relative;
+
+  flex: 1;
+
+  min-width: 0;
+
+  min-height: 45px;
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+
+  gap: 5px;
+
+  padding: 6px 0;
+}
+
+.recipient-composer input {
+  flex: 1 1 120px;
+
+  min-width: 120px;
+
+  height: 32px;
+
+  padding: 0;
+
+  color: #e5e5e7;
+
+  background: transparent;
+
+  border: 0;
+
+  outline: none;
+
+  font-size: 11px;
+}
+
+.recipient-composer input::placeholder {
+  color: #48484d;
+}
+
+.recipient-chip {
+  max-width: 260px;
+
+  min-height: 29px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 0 6px 0 9px;
+
+  color: #dcdcdf;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.035)
+    );
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+
+  border-radius: 999px;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+
+  font-size: 9px;
+  font-weight: 600;
+
+  animation: chip-in 0.14s ease-out;
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.recipient-chip > span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.recipient-chip small {
+  color: #66666b;
+
+  font-size: 8px;
+
+  font-weight: 500;
+}
+
+.recipient-chip button {
+  width: 20px;
+  height: 20px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  color: #6b6b70;
+
+  background: transparent;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.recipient-chip button:hover {
+  color: #eee;
+
+  background:
+    rgba(255, 255, 255, 0.08);
+}
+
+.recipient-suggestions {
+  position: absolute;
+
+  z-index: 200;
+
+  top: calc(100% - 1px);
+
+  left: 49px;
+  right: 0;
+
+  max-height: 270px;
+
+  overflow-y: auto;
+
+  padding: 6px;
+
+  border: 1px solid var(--line-strong);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.025)
+    ),
+    rgba(13, 13, 14, 0.98);
+
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+
+  backdrop-filter: blur(24px);
+
+  animation: suggestions-in 0.14s ease-out;
+}
+
+@keyframes suggestions-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.recipient-suggestions::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recipient-suggestions::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.recipient-suggestions::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+
+  border-radius: 999px;
+}
+
+.recipient-suggestion {
+  width: 100%;
+
+  min-height: 54px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 8px;
+
+  color: #ddd;
+
+  background: transparent;
+
+  border-radius: 9px;
+
+  cursor: pointer;
+
+  text-align: left;
+
+  transition:
+    background 0.14s ease,
+    transform 0.14s ease;
+}
+
+.recipient-suggestion:hover,
+.recipient-suggestion.active {
+  background:
+    rgba(255, 255, 255, 0.06);
+
+  transform: translateX(1px);
+}
+
+.recipient-suggestion-avatar {
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 auto;
+
+  display: grid;
+  place-items: center;
+
+  color: #0a0a0a;
+
+  background:
+    linear-gradient(
+      145deg,
+      #eeeeee,
+      #77777b
+    );
+
+  border-radius: 9px;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.recipient-suggestion-copy {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.recipient-suggestion-copy strong {
+  overflow: hidden;
+
+  color: #e3e3e6;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.recipient-suggestion-copy span {
+  overflow: hidden;
+
+  color: #66666b;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+
+  font-size: 9px;
+}
+
+.recipient-suggestion-check {
+  margin-left: auto;
+
+  width: 24px;
+  height: 24px;
+
+  display: grid;
+  place-items: center;
+
+  color: #85858a;
+}
+
+.recipient-search-status {
+  padding: 10px;
+
+  color: #66666b;
+
+  font-size: 9px;
+
+  text-align: center;
+}
+
+.recipient-search-status strong {
+  color: #aaa;
+
+  font-weight: 600;
+}
+
+.recipient-input-hint {
+  position: absolute;
+
+  right: 4px;
+  bottom: -17px;
+
+  color: #444449;
+
+  font-size: 7px;
+
+  pointer-events: none;
+}
+
+/* =========================================
+   COMPOSE SUBJECT / BODY
+========================================= */
 
 .compose-fields textarea {
   width: 100%;
@@ -2373,6 +2938,8 @@ textarea:focus-visible {
 
   background:
     rgba(0, 0, 0, 0.15);
+
+  border-radius: 0 0 18px 18px;
 }
 
 .compose-footer > span {
@@ -2433,6 +3000,126 @@ textarea:focus-visible {
   cursor: wait;
 
   opacity: 0.5;
+}
+
+/* =========================================
+   COMPOSE SECONDARY ACTIONS
+========================================= */
+
+.compose-secondary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.compose-secondary button {
+  width: 32px;
+  height: 32px;
+
+  display: grid;
+  place-items: center;
+
+  color: #66666b;
+
+  background: transparent;
+
+  border: 1px solid transparent;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.compose-secondary button:hover {
+  color: #ddd;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  border-color: var(--line);
+}
+
+/* =========================================
+   TOAST / STATUS
+========================================= */
+
+.mail-toast {
+  position: fixed;
+
+  right: 24px;
+  bottom: 24px;
+
+  z-index: 300;
+
+  min-width: 220px;
+  max-width: 380px;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  padding: 12px 14px;
+
+  color: #ddd;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.02)
+    ),
+    rgba(12, 12, 13, 0.96);
+
+  border: 1px solid var(--line-strong);
+
+  border-radius: 11px;
+
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  backdrop-filter: blur(25px);
+
+  font-size: 10px;
+
+  animation: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mail-toast.success {
+  border-color:
+    rgba(255, 255, 255, 0.14);
+}
+
+.mail-toast.error {
+  color: #ffbaba;
+
+  border-color:
+    rgba(255, 104, 104, 0.14);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 80, 80, 0.055),
+      rgba(255, 255, 255, 0.015)
+    ),
+    rgba(15, 10, 10, 0.96);
 }
 
 /* =========================================
@@ -2562,6 +3249,10 @@ textarea:focus-visible {
   .content-header {
     padding-top: 28px;
   }
+
+  .bulk-toolbar {
+    margin-bottom: 8px;
+  }
 }
 
 /* =========================================
@@ -2608,7 +3299,20 @@ textarea:focus-visible {
 
     padding: 11px;
 
-    gap: 10px;
+    gap: 8px;
+  }
+
+  .message-checkbox {
+    width: 15px;
+    height: 15px;
+  }
+
+  .message-checkbox:checked::after {
+    left: 3px;
+    top: 2px;
+
+    width: 5px;
+    height: 7px;
   }
 
   .row-avatar {
@@ -2621,7 +3325,7 @@ textarea:focus-visible {
   }
 
   .row-preview {
-    max-width: calc(100vw - 130px);
+    max-width: calc(100vw - 155px);
   }
 
   .row-chevron {
@@ -2631,6 +3335,10 @@ textarea:focus-visible {
   .row-star {
     width: 27px;
     height: 27px;
+  }
+
+  .row-date {
+    font-size: 8px;
   }
 
   .message-header {
@@ -2657,14 +3365,25 @@ textarea:focus-visible {
 
   .message-reply {
     padding: 16px 19px 21px;
+
+    flex-wrap: wrap;
   }
 
   .message-toolbar {
-    height: 62px;
+    min-height: 62px;
+
+    height: auto;
+
+    padding: 8px 0;
   }
 
   .toolbar-back span {
     display: none;
+  }
+
+  .toolbar-icon {
+    width: 33px;
+    height: 33px;
   }
 
   .compose-backdrop {
@@ -2677,8 +3396,39 @@ textarea:focus-visible {
   .compose-window {
     width: 100%;
     height: 100%;
+    max-height: none;
 
     border-radius: 0;
+  }
+
+  .compose-header {
+    border-radius: 0;
+  }
+
+  .compose-fields {
+    flex: 1;
+
+    overflow-y: auto;
+    overflow-x: visible;
+
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+
+  .compose-field > span {
+    width: 31px;
+    flex-basis: 31px;
+  }
+
+  .recipient-suggestions {
+    left: 46px;
+    right: 0;
+
+    max-height: 240px;
+  }
+
+  .recipient-chip {
+    max-width: calc(100vw - 100px);
   }
 
   .compose-fields textarea {
@@ -2689,9 +3439,15 @@ textarea:focus-visible {
 
   .compose-footer {
     margin-top: auto;
+
+    border-radius: 0;
   }
 
   .compose-footer > span {
+    display: none;
+  }
+
+  .compose-secondary {
     display: none;
   }
 
@@ -2703,6 +3459,95 @@ textarea:focus-visible {
 
   .auth-heading h1 {
     font-size: 25px;
+  }
+
+  .bulk-toolbar {
+    min-height: auto;
+
+    flex-wrap: wrap;
+
+    padding: 7px;
+  }
+
+  .bulk-toolbar strong {
+    width: 100%;
+
+    padding: 2px 4px 4px;
+  }
+
+  .bulk-toolbar .bulk-spacer {
+    display: none;
+  }
+
+  .bulk-toolbar button {
+    flex: 1;
+  }
+
+  .mail-toast {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+/* =========================================
+   VERY SMALL SCREENS
+========================================= */
+
+@media (max-width: 390px) {
+  .topbar {
+    gap: 7px;
+
+    padding: 0 9px;
+  }
+
+  .brand-mark {
+    width: 31px;
+    height: 31px;
+
+    border-radius: 9px;
+  }
+
+  .account {
+    padding: 3px;
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mail-content {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .message-row {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .row-subject {
+    font-size: 10px;
+  }
+
+  .row-preview {
+    font-size: 9px;
+  }
+
+  .row-star {
+    display: none;
+  }
+
+  .recipient-suggestions {
+    left: 42px;
+  }
+
+  .message-reply button {
+    flex: 1;
   }
 }
 
@@ -2722,4 +3567,3 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
-
