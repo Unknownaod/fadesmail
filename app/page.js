@@ -12,6 +12,8 @@ const API_URL =
   process.env.NEXT_PUBLIC_MAIL_API_URL ||
   "https://mail-api.fades.lol";
 
+const LOGO_SRC = "/logo.png";
+
 const SYSTEM_FOLDERS = [
   { type: "inbox", name: "Inbox", icon: "inbox" },
   { type: "starred", name: "Starred", icon: "star" },
@@ -21,6 +23,20 @@ const SYSTEM_FOLDERS = [
   { type: "spam", name: "Spam", icon: "spam" },
   { type: "trash", name: "Trash", icon: "trash" },
 ];
+
+function Logo({ className = "", size = 32, alt = "Fades" }) {
+  return (
+    <img
+      src={LOGO_SRC}
+      alt={alt}
+      className={`fades-logo ${className}`}
+      style={{
+        width: size,
+        height: size,
+      }}
+    />
+  );
+}
 
 function Icon({ name, size = 18 }) {
   const common = {
@@ -317,9 +333,7 @@ function getRecipientName(recipient) {
 }
 
 function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    value
-  );
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function uniqueEmails(values) {
@@ -341,201 +355,111 @@ function uniqueEmails(values) {
 }
 
 export default function Home() {
-  const [authLoading, setAuthLoading] =
-    useState(true);
-
-  const [authenticated, setAuthenticated] =
-    useState(false);
-
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
 
-  const [authMode, setAuthMode] =
-    useState("signin");
+  const [authMode, setAuthMode] = useState("signin");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
-  const [username, setUsername] =
-    useState("");
+  const [mailbox, setMailbox] = useState(null);
+  const [folders, setFolders] = useState([]);
+  const [activeFolder, setActiveFolder] = useState("inbox");
+  const [messages, setMessages] = useState([]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [mailError, setMailError] = useState("");
+  const [search, setSearch] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [email, setEmail] =
-    useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const [password, setPassword] =
-    useState("");
-
-  const [authError, setAuthError] =
-    useState("");
-
-  const [authSubmitting, setAuthSubmitting] =
-    useState(false);
-
-  const [mailbox, setMailbox] =
-    useState(null);
-
-  const [folders, setFolders] =
-    useState([]);
-
-  const [activeFolder, setActiveFolder] =
-    useState("inbox");
-
-  const [messages, setMessages] =
-    useState([]);
-
-  const [selectedMessage, setSelectedMessage] =
-    useState(null);
-
-  const [selectedIds, setSelectedIds] =
-    useState([]);
-
-  const [messagesLoading, setMessagesLoading] =
-    useState(false);
-
-  const [mailError, setMailError] =
-    useState("");
-
-  const [search, setSearch] =
-    useState("");
-
-  const [sidebarOpen, setSidebarOpen] =
-    useState(false);
-
-  const [composeOpen, setComposeOpen] =
-    useState(false);
-
-  const [composeSubject, setComposeSubject] =
-    useState("");
-
-  const [composeBody, setComposeBody] =
-    useState("");
-
-  const [sending, setSending] =
-    useState(false);
-
-  const [recipientQuery, setRecipientQuery] =
-    useState("");
-
-  const [recipientSuggestions, setRecipientSuggestions] =
-    useState([]);
-
-  const [recipientLoading, setRecipientLoading] =
-    useState(false);
-
-  const [recipientChips, setRecipientChips] =
-    useState([]);
-
-  const [ccChips, setCcChips] =
-    useState([]);
-
-  const [bccChips, setBccChips] =
-    useState([]);
-
-  const [recipientType, setRecipientType] =
-    useState("to");
-
-  const [showCc, setShowCc] =
-    useState(false);
-
-  const [showBcc, setShowBcc] =
-    useState(false);
-
+  const [recipientQuery, setRecipientQuery] = useState("");
+  const [recipientSuggestions, setRecipientSuggestions] = useState([]);
+  const [recipientLoading, setRecipientLoading] = useState(false);
+  const [recipientChips, setRecipientChips] = useState([]);
+  const [ccChips, setCcChips] = useState([]);
+  const [bccChips, setBccChips] = useState([]);
+  const [recipientType, setRecipientType] = useState("to");
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [recipientSuggestionsOpen, setRecipientSuggestionsOpen] =
     useState(false);
+  const [recipientActiveIndex, setRecipientActiveIndex] = useState(-1);
 
-  const [recipientActiveIndex, setRecipientActiveIndex] =
-    useState(-1);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState(null);
 
-  const [actionLoading, setActionLoading] =
-    useState(false);
-
-  const [toast, setToast] =
-    useState(null);
-
-  const recipientInputRef =
-    useRef(null);
-
-  const toastTimerRef =
-    useRef(null);
+  const recipientInputRef = useRef(null);
+  const toastTimerRef = useRef(null);
 
   const currentFolder = useMemo(() => {
     return (
       folders.find(
-        (folder) =>
-          folder.type === activeFolder
+        (folder) => folder.type === activeFolder
       ) ||
       SYSTEM_FOLDERS.find(
-        (folder) =>
-          folder.type === activeFolder
+        (folder) => folder.type === activeFolder
       )
     );
   }, [folders, activeFolder]);
 
-  const resolvedActiveFolder =
-    activeFolder.includes(":")
-      ? activeFolder.split(":")[0]
-      : activeFolder;
+  const resolvedActiveFolder = activeFolder.includes(":")
+    ? activeFolder.split(":")[0]
+    : activeFolder;
 
-  const activeCustomFolderId =
-    activeFolder.includes(":")
-      ? activeFolder.split(":")[1]
-      : null;
+  const activeCustomFolderId = activeFolder.includes(":")
+    ? activeFolder.split(":")[1]
+    : null;
 
-  const currentFolderForDisplay =
-    activeCustomFolderId
-      ? folders.find(
-          (folder) =>
-            String(folder.id) ===
-            String(
-              activeCustomFolderId
-            )
-        )
-      : currentFolder;
+  const currentFolderForDisplay = activeCustomFolderId
+    ? folders.find(
+        (folder) =>
+          String(folder.id) === String(activeCustomFolderId)
+      )
+    : currentFolder;
 
-  const unreadCount =
-    folders.reduce(
-      (total, folder) =>
-        total +
-        Number(
-          folder.unreadCount || 0
-        ),
-      0
-    );
+  const unreadCount = folders.reduce(
+    (total, folder) =>
+      total + Number(folder.unreadCount || 0),
+    0
+  );
 
   const allVisibleSelected =
     messages.length > 0 &&
     messages.every((message) =>
-      selectedIds.includes(
-        message.id
-      )
+      selectedIds.includes(message.id)
     );
 
-  const selectedCount =
-    selectedIds.length;
+  const selectedCount = selectedIds.length;
 
-  function showToast(
-    message,
-    type = "success"
-  ) {
+  function showToast(message, type = "success") {
     setToast({
       message,
       type,
     });
 
     if (toastTimerRef.current) {
-      clearTimeout(
-        toastTimerRef.current
-      );
+      clearTimeout(toastTimerRef.current);
     }
 
-    toastTimerRef.current =
-      setTimeout(() => {
-        setToast(null);
-      }, 3200);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3200);
   }
 
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) {
-        clearTimeout(
-          toastTimerRef.current
-        );
+        clearTimeout(toastTimerRef.current);
       }
     };
   }, []);
@@ -548,12 +472,9 @@ export default function Home() {
     try {
       setAuthLoading(true);
 
-      const response = await fetch(
-        `${API_URL}/auth/me`,
-        {
-          credentials: "include",
-        }
-      );
+      const response = await fetch(`${API_URL}/auth/me`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         setAuthenticated(false);
@@ -561,8 +482,7 @@ export default function Home() {
         return;
       }
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       const authenticatedUser =
         data?.user ||
@@ -612,18 +532,12 @@ export default function Home() {
       const body =
         authMode === "signin"
           ? {
-              email: email
-                .trim()
-                .toLowerCase(),
+              email: email.trim().toLowerCase(),
               password,
             }
           : {
-              username: username
-                .trim()
-                .toLowerCase(),
-              email: email
-                .trim()
-                .toLowerCase(),
+              username: username.trim().toLowerCase(),
+              email: email.trim().toLowerCase(),
               password,
             };
 
@@ -633,17 +547,15 @@ export default function Home() {
           method: "POST",
           credentials: "include",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
         }
       );
 
-      const data =
-        await response
-          .json()
-          .catch(() => null);
+      const data = await response
+        .json()
+        .catch(() => null);
 
       if (!response.ok) {
         throw new Error(
@@ -679,13 +591,10 @@ export default function Home() {
 
   async function logout() {
     try {
-      await fetch(
-        `${API_URL}/auth/logout`,
-        {
-          method: "POST",
-          credentials: "include",
-        }
-      );
+      await fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
     } catch (error) {
       console.error(
         "[Fades Mail] Logout failed:",
@@ -706,232 +615,190 @@ export default function Home() {
    * MAILBOX
    */
 
-  const loadMailbox = useCallback(
-    async () => {
-      try {
-        setMailError("");
+  const loadMailbox = useCallback(async () => {
+    try {
+      setMailError("");
 
-        const response = await fetch(
-          `${API_URL}/mail/me`,
-          {
-            credentials: "include",
-          }
-        );
+      const response = await fetch(
+        `${API_URL}/mail/me`,
+        {
+          credentials: "include",
+        }
+      );
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            setAuthenticated(false);
-            setUser(null);
-          }
-
-          throw new Error(
-            `Mailbox request failed (${response.status})`
-          );
+      if (!response.ok) {
+        if (response.status === 401) {
+          setAuthenticated(false);
+          setUser(null);
         }
 
-        const data =
-          await response.json();
-
-        const currentMailbox =
-          data?.mailbox || data;
-
-        if (
-          !currentMailbox ||
-          !currentMailbox.id
-        ) {
-          throw new Error(
-            "No mailbox is associated with this account."
-          );
-        }
-
-        setMailbox(currentMailbox);
-      } catch (error) {
-        console.error(
-          "[Fades Mail] Mailbox error:",
-          error
-        );
-
-        setMailbox(null);
-
-        setMailError(
-          error.message ||
-            "Unable to load your mailbox."
+        throw new Error(
+          `Mailbox request failed (${response.status})`
         );
       }
-    },
-    []
-  );
+
+      const data = await response.json();
+
+      const currentMailbox =
+        data?.mailbox || data;
+
+      if (
+        !currentMailbox ||
+        !currentMailbox.id
+      ) {
+        throw new Error(
+          "No mailbox is associated with this account."
+        );
+      }
+
+      setMailbox(currentMailbox);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Mailbox error:",
+        error
+      );
+
+      setMailbox(null);
+
+      setMailError(
+        error.message ||
+          "Unable to load your mailbox."
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!authenticated) return;
 
     loadMailbox();
-  }, [
-    authenticated,
-    loadMailbox,
-  ]);
+  }, [authenticated, loadMailbox]);
 
   /*
    * FOLDERS
    */
 
-  const loadFolders = useCallback(
-    async () => {
-      if (!mailbox?.id) return;
+  const loadFolders = useCallback(async () => {
+    if (!mailbox?.id) return;
 
-      try {
-        const response = await fetch(
-          `${API_URL}/mail/folders?mailboxId=${mailbox.id}`,
-          {
-            credentials: "include",
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            `Folder request failed (${response.status})`
-          );
+    try {
+      const response = await fetch(
+        `${API_URL}/mail/folders?mailboxId=${mailbox.id}`,
+        {
+          credentials: "include",
         }
+      );
 
-        const data =
-          await response.json();
-
-        const items = Array.isArray(data)
-          ? data
-          : data.folders || [];
-
-        setFolders(items);
-      } catch (error) {
-        console.error(
-          "[Fades Mail] Folder error:",
-          error
+      if (!response.ok) {
+        throw new Error(
+          `Folder request failed (${response.status})`
         );
       }
-    },
-    [mailbox]
-  );
+
+      const data = await response.json();
+
+      const items = Array.isArray(data)
+        ? data
+        : data.folders || [];
+
+      setFolders(items);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Folder error:",
+        error
+      );
+    }
+  }, [mailbox]);
 
   useEffect(() => {
     if (!mailbox) return;
 
     loadFolders();
-  }, [
-    mailbox,
-    loadFolders,
-  ]);
+  }, [mailbox, loadFolders]);
 
   /*
    * MESSAGES
    */
 
-  const loadMessages = useCallback(
-    async () => {
-      if (!mailbox?.id) return;
+  const loadMessages = useCallback(async () => {
+    if (!mailbox?.id) return;
 
-      setMessagesLoading(true);
+    setMessagesLoading(true);
 
-      try {
-        const params =
-          new URLSearchParams();
+    try {
+      const params = new URLSearchParams();
 
+      params.set(
+        "mailboxId",
+        String(mailbox.id)
+      );
+
+      if (resolvedActiveFolder === "starred") {
+        params.set("starred", "true");
+      } else if (resolvedActiveFolder) {
         params.set(
-          "mailboxId",
-          String(mailbox.id)
-        );
-
-        if (
-          resolvedActiveFolder ===
-          "starred"
-        ) {
-          params.set(
-            "starred",
-            "true"
-          );
-        } else if (
+          "folder",
           resolvedActiveFolder
-        ) {
-          params.set(
-            "folder",
-            resolvedActiveFolder
-          );
-        }
-
-        if (search.trim()) {
-          params.set(
-            "search",
-            search.trim()
-          );
-        }
-
-        params.set(
-          "limit",
-          "100"
         );
-
-        params.set(
-          "offset",
-          "0"
-        );
-
-        const response =
-          await fetch(
-            `${API_URL}/mail/messages?${params.toString()}`,
-            {
-              credentials: "include",
-            }
-          );
-
-        if (!response.ok) {
-          if (
-            response.status === 401
-          ) {
-            setAuthenticated(false);
-            setUser(null);
-          }
-
-          throw new Error(
-            `Message request failed (${response.status})`
-          );
-        }
-
-        const data =
-          await response.json();
-
-        const items =
-          Array.isArray(data)
-            ? data
-            : data.messages || [];
-
-        setMessages(items);
-
-        setSelectedIds([]);
-      } catch (error) {
-        console.error(
-          "[Fades Mail] Message error:",
-          error
-        );
-
-        setMessages([]);
-        setSelectedIds([]);
-      } finally {
-        setMessagesLoading(false);
       }
-    },
-    [
-      mailbox,
-      resolvedActiveFolder,
-      search,
-    ]
-  );
+
+      if (search.trim()) {
+        params.set(
+          "search",
+          search.trim()
+        );
+      }
+
+      params.set("limit", "100");
+      params.set("offset", "0");
+
+      const response = await fetch(
+        `${API_URL}/mail/messages?${params.toString()}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setAuthenticated(false);
+          setUser(null);
+        }
+
+        throw new Error(
+          `Message request failed (${response.status})`
+        );
+      }
+
+      const data = await response.json();
+
+      const items = Array.isArray(data)
+        ? data
+        : data.messages || [];
+
+      setMessages(items);
+      setSelectedIds([]);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Message error:",
+        error
+      );
+
+      setMessages([]);
+      setSelectedIds([]);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [
+    mailbox,
+    resolvedActiveFolder,
+    search,
+  ]);
 
   useEffect(() => {
     if (!mailbox) return;
 
     loadMessages();
-  }, [
-    mailbox,
-    loadMessages,
-  ]);
+  }, [mailbox, loadMessages]);
 
   /*
    * MESSAGE OPEN
@@ -941,13 +808,12 @@ export default function Home() {
     if (!mailbox?.id) return;
 
     try {
-      const response =
-        await fetch(
-          `${API_URL}/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
-          {
-            credentials: "include",
-          }
-        );
+      const response = await fetch(
+        `${API_URL}/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
+        {
+          credentials: "include",
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -955,16 +821,13 @@ export default function Home() {
         );
       }
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       const openedMessage =
         data?.message ||
         data;
 
-      setSelectedMessage(
-        openedMessage
-      );
+      setSelectedMessage(openedMessage);
 
       if (!message.isRead) {
         await fetch(
@@ -973,12 +836,10 @@ export default function Home() {
             method: "POST",
             credentials: "include",
             headers: {
-              "Content-Type":
-                "application/json",
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              mailboxId:
-                mailbox.id,
+              mailboxId: mailbox.id,
             }),
           }
         );
@@ -1012,22 +873,19 @@ export default function Home() {
         : "star";
 
     try {
-      const response =
-        await fetch(
-          `${API_URL}/mail/messages/${message.id}/${endpoint}`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              mailboxId:
-                mailbox.id,
-            }),
-          }
-        );
+      const response = await fetch(
+        `${API_URL}/mail/messages/${message.id}/${endpoint}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mailboxId: mailbox.id,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -1035,30 +893,27 @@ export default function Home() {
         );
       }
 
-      setMessages(
-        (current) =>
-          current.map((item) =>
-            item.id === message.id
-              ? {
-                  ...item,
-                  isStarred:
-                    !message.isStarred,
-                }
-              : item
-          )
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                isStarred:
+                  !message.isStarred,
+              }
+            : item
+        )
       );
 
       if (
         selectedMessage?.id ===
         message.id
       ) {
-        setSelectedMessage(
-          (current) => ({
-            ...current,
-            isStarred:
-              !message.isStarred,
-          })
-        );
+        setSelectedMessage((current) => ({
+          ...current,
+          isStarred:
+            !message.isStarred,
+        }));
       }
 
       loadFolders();
@@ -1092,29 +947,25 @@ export default function Home() {
     setActionLoading(true);
 
     try {
-      const response =
-        await fetch(
-          `${API_URL}/mail/messages/${message.id}/move`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              mailboxId:
-                mailbox.id,
-              folder,
-            }),
-          }
-        );
+      const response = await fetch(
+        `${API_URL}/mail/messages/${message.id}/move`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mailboxId: mailbox.id,
+            folder,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        const data =
-          await response
-            .json()
-            .catch(() => null);
+        const data = await response
+          .json()
+          .catch(() => null);
 
         throw new Error(
           data?.message ||
@@ -1192,9 +1043,7 @@ export default function Home() {
    * READ / UNREAD
    */
 
-  async function toggleRead(
-    message
-  ) {
+  async function toggleRead(message) {
     if (!mailbox?.id) return;
 
     setActionLoading(true);
@@ -1205,22 +1054,19 @@ export default function Home() {
           ? "unread"
           : "read";
 
-      const response =
-        await fetch(
-          `${API_URL}/mail/messages/${message.id}/${endpoint}`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              mailboxId:
-                mailbox.id,
-            }),
-          }
-        );
+      const response = await fetch(
+        `${API_URL}/mail/messages/${message.id}/${endpoint}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mailboxId: mailbox.id,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -1231,28 +1077,25 @@ export default function Home() {
       const nextRead =
         !message.isRead;
 
-      setMessages(
-        (current) =>
-          current.map((item) =>
-            item.id === message.id
-              ? {
-                  ...item,
-                  isRead: nextRead,
-                }
-              : item
-          )
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === message.id
+            ? {
+                ...item,
+                isRead: nextRead,
+              }
+            : item
+        )
       );
 
       if (
         selectedMessage?.id ===
         message.id
       ) {
-        setSelectedMessage(
-          (current) => ({
-            ...current,
-            isRead: nextRead,
-          })
-        );
+        setSelectedMessage((current) => ({
+          ...current,
+          isRead: nextRead,
+        }));
       }
 
       await loadFolders();
@@ -1275,20 +1118,16 @@ export default function Home() {
    * BULK SELECTION
    */
 
-  function toggleSelectedMessage(
-    messageId
-  ) {
-    setSelectedIds(
-      (current) =>
-        current.includes(messageId)
-          ? current.filter(
-              (id) =>
-                id !== messageId
-            )
-          : [
-              ...current,
-              messageId,
-            ]
+  function toggleSelectedMessage(messageId) {
+    setSelectedIds((current) =>
+      current.includes(messageId)
+        ? current.filter(
+            (id) => id !== messageId
+          )
+        : [
+            ...current,
+            messageId,
+          ]
     );
   }
 
@@ -1300,8 +1139,7 @@ export default function Home() {
 
     setSelectedIds(
       messages.map(
-        (message) =>
-          message.id
+        (message) => message.id
       )
     );
   }
@@ -1310,9 +1148,7 @@ export default function Home() {
     setSelectedIds([]);
   }
 
-  async function bulkMove(
-    folder
-  ) {
+  async function bulkMove(folder) {
     if (
       !mailbox?.id ||
       selectedIds.length === 0
@@ -1508,16 +1344,12 @@ export default function Home() {
           query.trim();
 
         if (!cleanQuery) {
-          setRecipientSuggestions(
-            []
-          );
+          setRecipientSuggestions([]);
           setRecipientLoading(false);
           return;
         }
 
-        setRecipientLoading(
-          true
-        );
+        setRecipientLoading(true);
 
         try {
           const response =
@@ -1532,9 +1364,7 @@ export default function Home() {
             );
 
           if (!response.ok) {
-            setRecipientSuggestions(
-              []
-            );
+            setRecipientSuggestions([]);
             return;
           }
 
@@ -1553,8 +1383,8 @@ export default function Home() {
             new Set(
               getRecipientList(
                 recipientType
-              ).map((email) =>
-                email.toLowerCase()
+              ).map((item) =>
+                item.toLowerCase()
               )
             );
 
@@ -1594,13 +1424,9 @@ export default function Home() {
             error
           );
 
-          setRecipientSuggestions(
-            []
-          );
+          setRecipientSuggestions([]);
         } finally {
-          setRecipientLoading(
-            false
-          );
+          setRecipientLoading(false);
         }
       },
       [
@@ -1614,24 +1440,16 @@ export default function Home() {
 
   useEffect(() => {
     if (!composeOpen) {
-      setRecipientSuggestions(
-        []
-      );
-      setRecipientSuggestionsOpen(
-        false
-      );
+      setRecipientSuggestions([]);
+      setRecipientSuggestionsOpen(false);
       return;
     }
 
-    const timer =
-      setTimeout(() => {
-        searchRecipients(
-          recipientQuery
-        );
-      }, 180);
+    const timer = setTimeout(() => {
+      searchRecipients(recipientQuery);
+    }, 180);
 
-    return () =>
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [
     recipientQuery,
     composeOpen,
@@ -1643,9 +1461,7 @@ export default function Home() {
    * RECIPIENT CHIPS
    */
 
-  function getRecipientList(
-    type
-  ) {
+  function getRecipientList(type) {
     if (type === "cc") {
       return ccChips;
     }
@@ -1657,10 +1473,7 @@ export default function Home() {
     return recipientChips;
   }
 
-  function setRecipientList(
-    type,
-    updater
-  ) {
+  function setRecipientList(type, updater) {
     if (type === "cc") {
       setCcChips(updater);
       return;
@@ -1731,17 +1544,13 @@ export default function Home() {
 
     setRecipientQuery("");
     setRecipientSuggestions([]);
-    setRecipientSuggestionsOpen(
-      false
-    );
+    setRecipientSuggestionsOpen(false);
     setRecipientActiveIndex(-1);
 
     return true;
   }
 
-  function addTypedRecipients(
-    type
-  ) {
+  function addTypedRecipients(type) {
     const values =
       recipientQuery
         .split(/[;,]+/)
@@ -1757,14 +1566,8 @@ export default function Home() {
     let added = false;
 
     for (const value of values) {
-      if (
-        isValidEmail(value)
-      ) {
-        addRecipient(
-          value,
-          type
-        );
-
+      if (isValidEmail(value)) {
+        addRecipient(value, type);
         added = true;
       }
     }
@@ -1806,9 +1609,7 @@ export default function Home() {
     ) {
       event.preventDefault();
 
-      setRecipientSuggestionsOpen(
-        true
-      );
+      setRecipientSuggestionsOpen(true);
 
       setRecipientActiveIndex(
         (current) =>
@@ -1838,23 +1639,13 @@ export default function Home() {
       return;
     }
 
-    if (
-      event.key === "Escape"
-    ) {
-      setRecipientSuggestionsOpen(
-        false
-      );
-
-      setRecipientActiveIndex(
-        -1
-      );
-
+    if (event.key === "Escape") {
+      setRecipientSuggestionsOpen(false);
+      setRecipientActiveIndex(-1);
       return;
     }
 
-    if (
-      event.key === "Enter"
-    ) {
+    if (event.key === "Enter") {
       event.preventDefault();
 
       if (
@@ -1885,7 +1676,6 @@ export default function Home() {
       event.key === ";"
     ) {
       event.preventDefault();
-
       addTypedRecipients(type);
       return;
     }
@@ -1930,9 +1720,7 @@ export default function Home() {
       !recipientQuery
     ) {
       const chips =
-        getRecipientList(
-          type
-        );
+        getRecipientList(type);
 
       if (chips.length > 0) {
         removeRecipient(
@@ -1943,25 +1731,7 @@ export default function Home() {
     }
   }
 
-  function focusRecipientType(
-    type
-  ) {
-    setRecipientType(type);
-    setRecipientQuery("");
-    setRecipientSuggestions([]);
-    setRecipientSuggestionsOpen(
-      false
-    );
-    setRecipientActiveIndex(-1);
-
-    setTimeout(() => {
-      recipientInputRef.current?.focus();
-    }, 0);
-  }
-
-  function openComposer(
-    options = {}
-  ) {
+  function openComposer(options = {}) {
     const {
       to = [],
       cc = [],
@@ -2002,9 +1772,7 @@ export default function Home() {
 
     setRecipientQuery("");
     setRecipientSuggestions([]);
-    setRecipientSuggestionsOpen(
-      false
-    );
+    setRecipientSuggestionsOpen(false);
     setRecipientActiveIndex(-1);
     setRecipientType("to");
 
@@ -2031,9 +1799,7 @@ export default function Home() {
     setComposeOpen(false);
     setRecipientQuery("");
     setRecipientSuggestions([]);
-    setRecipientSuggestionsOpen(
-      false
-    );
+    setRecipientSuggestionsOpen(false);
     setRecipientActiveIndex(-1);
   }
 
@@ -2046,9 +1812,7 @@ export default function Home() {
 
     if (!mailbox?.id) return;
 
-    if (
-      recipientQuery.trim()
-    ) {
+    if (recipientQuery.trim()) {
       if (
         isValidEmail(
           recipientQuery.trim()
@@ -2068,9 +1832,7 @@ export default function Home() {
       }
     }
 
-    if (
-      recipientChips.length === 0
-    ) {
+    if (recipientChips.length === 0) {
       showToast(
         "Add at least one recipient.",
         "error"
@@ -2095,25 +1857,18 @@ export default function Home() {
             body: JSON.stringify({
               mailboxId:
                 mailbox.id,
-
               sender:
                 mailbox.email,
-
               recipients:
                 recipientChips,
-
               cc:
                 ccChips,
-
               bcc:
                 bccChips,
-
               subject:
                 composeSubject.trim(),
-
               bodyText:
                 composeBody,
-
               folder: "sent",
             }),
           }
@@ -2137,9 +1892,7 @@ export default function Home() {
       setBccChips([]);
       setRecipientQuery("");
       setRecipientSuggestions([]);
-      setRecipientSuggestionsOpen(
-        false
-      );
+      setRecipientSuggestionsOpen(false);
       setRecipientActiveIndex(-1);
       setShowCc(false);
       setShowBcc(false);
@@ -2149,10 +1902,7 @@ export default function Home() {
 
       await loadFolders();
 
-      if (
-        resolvedActiveFolder ===
-        "sent"
-      ) {
+      if (resolvedActiveFolder === "sent") {
         await loadMessages();
       }
 
@@ -2179,10 +1929,7 @@ export default function Home() {
    * FOLDERS
    */
 
-  function selectFolder(
-    type,
-    id = null
-  ) {
+  function selectFolder(type, id = null) {
     setSelectedMessage(null);
     setSelectedIds([]);
     setSearch("");
@@ -2202,17 +1949,15 @@ export default function Home() {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      const target =
-        event.target;
+      const target = event.target;
 
       const isTyping =
-        target instanceof
-          HTMLElement &&
-        (target.tagName ===
-          "INPUT" ||
-          target.tagName ===
-            "TEXTAREA" ||
-          target.isContentEditable);
+        target instanceof HTMLElement &&
+        (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        );
 
       if (
         event.key === "/" &&
@@ -2232,8 +1977,7 @@ export default function Home() {
       }
 
       if (
-        event.key.toLowerCase() ===
-          "c" &&
+        event.key.toLowerCase() === "c" &&
         !isTyping &&
         !composeOpen &&
         authenticated
@@ -2245,18 +1989,14 @@ export default function Home() {
         return;
       }
 
-      if (
-        event.key === "Escape"
-      ) {
+      if (event.key === "Escape") {
         if (composeOpen) {
           closeComposer();
           return;
         }
 
         if (selectedMessage) {
-          setSelectedMessage(
-            null
-          );
+          setSelectedMessage(null);
           return;
         }
 
@@ -2294,7 +2034,7 @@ export default function Home() {
       <main className="auth-page">
         <div className="auth-loading-card">
           <div className="loading-logo">
-            F
+            <Logo size={46} />
           </div>
 
           <div className="spinner" />
@@ -2321,7 +2061,7 @@ export default function Home() {
         <div className="auth-shell">
           <div className="auth-brand">
             <div className="auth-brand-mark">
-              F
+              <Logo size={40} />
             </div>
 
             <div>
@@ -2339,22 +2079,22 @@ export default function Home() {
           <div className="auth-card">
             <div className="auth-card-top">
               <div className="auth-pill">
-                <span />
-                Fades Mail
+                <Logo size={18} />
+                <span>
+                  Fades Mail
+                </span>
               </div>
             </div>
 
             <div className="auth-heading">
               <h1>
-                {authMode ===
-                "signin"
+                {authMode === "signin"
                   ? "Welcome back."
                   : "Create your mailbox."}
               </h1>
 
               <p>
-                {authMode ===
-                "signin"
+                {authMode === "signin"
                   ? "Sign in to continue to your Fades Mail account."
                   : "Create your own Fades Mail address and start sending."}
               </p>
@@ -2364,8 +2104,7 @@ export default function Home() {
               className="auth-form"
               onSubmit={submitAuth}
             >
-              {authMode ===
-                "signup" && (
+              {authMode === "signup" && (
                 <label>
                   <span>
                     Username
@@ -2375,12 +2114,9 @@ export default function Home() {
                     <input
                       type="text"
                       value={username}
-                      onChange={(
-                        event
-                      ) =>
+                      onChange={(event) =>
                         setUsername(
-                          event.target
-                            .value
+                          event.target.value
                         )
                       }
                       placeholder="yourname"
@@ -2394,8 +2130,7 @@ export default function Home() {
                   </div>
 
                   <em>
-                    Your new address
-                    will{" "}
+                    Your new address will{" "}
                     {username
                       ? `${username.toLowerCase()}@fades.lol`
                       : "yourname@fades.lol"}
@@ -2411,12 +2146,9 @@ export default function Home() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(
-                    event
-                  ) =>
+                  onChange={(event) =>
                     setEmail(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   placeholder="you@example.com"
@@ -2433,18 +2165,14 @@ export default function Home() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(
-                    event
-                  ) =>
+                  onChange={(event) =>
                     setPassword(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   placeholder="Your password"
                   autoComplete={
-                    authMode ===
-                    "signin"
+                    authMode === "signin"
                       ? "current-password"
                       : "new-password"
                   }
@@ -2462,15 +2190,12 @@ export default function Home() {
               <button
                 className="auth-submit"
                 type="submit"
-                disabled={
-                  authSubmitting
-                }
+                disabled={authSubmitting}
               >
                 <span>
                   {authSubmitting
                     ? "Please wait..."
-                    : authMode ===
-                      "signin"
+                    : authMode === "signin"
                     ? "Sign in"
                     : "Create mailbox"}
                 </span>
@@ -2485,8 +2210,7 @@ export default function Home() {
 
             <div className="auth-switch">
               <span>
-                {authMode ===
-                "signin"
+                {authMode === "signin"
                   ? "Don't have an account?"
                   : "Already have an account?"}
               </span>
@@ -2497,15 +2221,13 @@ export default function Home() {
                   setAuthError("");
 
                   setAuthMode(
-                    authMode ===
-                      "signin"
+                    authMode === "signin"
                       ? "signup"
                       : "signin"
                   );
                 }}
               >
-                {authMode ===
-                "signin"
+                {authMode === "signin"
                   ? "Create one"
                   : "Sign in"}
               </button>
@@ -2556,7 +2278,7 @@ export default function Home() {
 
         <div className="brand">
           <div className="brand-mark">
-            F
+            <Logo size={34} />
           </div>
 
           <div className="brand-copy">
@@ -2620,11 +2342,8 @@ export default function Home() {
           </button>
 
           <div className="account">
-            <div className="avatar">
-              {getInitial(
-                mailbox?.email ||
-                  user?.username
-              )}
+            <div className="avatar avatar-logo">
+              <Logo size={25} />
             </div>
 
             <div className="account-info">
@@ -2669,10 +2388,7 @@ export default function Home() {
               type="button"
               onClick={() => {
                 openComposer();
-
-                setSidebarOpen(
-                  false
-                );
+                setSidebarOpen(false);
               }}
             >
               <Icon
@@ -2689,9 +2405,7 @@ export default function Home() {
               className="close-sidebar"
               type="button"
               onClick={() =>
-                setSidebarOpen(
-                  false
-                )
+                setSidebarOpen(false)
               }
               aria-label="Close sidebar"
             >
@@ -2748,9 +2462,7 @@ export default function Home() {
 
                 return (
                   <button
-                    key={
-                      folder.type
-                    }
+                    key={folder.type}
                     type="button"
                     className={`folder-button ${
                       active
@@ -2773,17 +2485,12 @@ export default function Home() {
                     </span>
 
                     <span className="folder-name">
-                      {
-                        folder.name
-                      }
+                      {folder.name}
                     </span>
 
-                    {unread >
-                      0 && (
+                    {unread > 0 && (
                       <span className="unread-count">
-                        {
-                          unread
-                        }
+                        {unread}
                       </span>
                     )}
                   </button>
@@ -2850,8 +2557,7 @@ export default function Home() {
                         {Number(
                           folder.unreadCount ||
                             0
-                        ) >
-                          0 && (
+                        ) > 0 && (
                           <span className="unread-count">
                             {Number(
                               folder.unreadCount ||
@@ -2889,9 +2595,7 @@ export default function Home() {
             className="sidebar-overlay"
             type="button"
             onClick={() =>
-              setSidebarOpen(
-                false
-              )
+              setSidebarOpen(false)
             }
             aria-label="Close menu"
           />
@@ -3078,12 +2782,7 @@ export default function Home() {
 
                   <div className="message-meta">
                     <div className="sender-avatar">
-                      {getInitial(
-                        getSenderName(
-                          selectedMessage.sender,
-                          selectedMessage.senderName
-                        )
-                      )}
+                      <Logo size={28} />
                     </div>
 
                     <div className="sender-details">
@@ -3109,9 +2808,7 @@ export default function Home() {
                               .map(
                                 normalizeRecipient
                               )
-                              .join(
-                                ", "
-                              )
+                              .join(", ")
                           : "you"}
                       </span>
 
@@ -3126,9 +2823,7 @@ export default function Home() {
                               .map(
                                 normalizeRecipient
                               )
-                              .join(
-                                ", "
-                              )}
+                              .join(", ")}
                           </span>
                         )}
                     </div>
@@ -3261,10 +2956,7 @@ export default function Home() {
                       resolvedActiveFolder ===
                         "inbox" && (
                         <span className="title-badge">
-                          {
-                            unreadCount
-                          }{" "}
-                          unread
+                          {unreadCount} unread
                         </span>
                       )}
                   </div>
@@ -3272,9 +2964,7 @@ export default function Home() {
 
                 <div className="content-actions">
                   <span className="message-count">
-                    {
-                      messages.length
-                    }
+                    {messages.length}
                   </span>
 
                   <span>
@@ -3286,8 +2976,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {selectedCount >
-                0 && (
+              {selectedCount > 0 && (
                 <div className="bulk-toolbar">
                   <div className="bulk-toolbar-left">
                     <button
@@ -3319,8 +3008,7 @@ export default function Home() {
                     </button>
 
                     <span className="bulk-count">
-                      {selectedCount}{" "}
-                      selected
+                      {selectedCount} selected
                     </span>
                   </div>
 
@@ -3447,8 +3135,7 @@ export default function Home() {
 
                     <p>
                       Fetching your
-                      latest
-                      messages...
+                      latest messages...
                     </p>
                   </div>
                 ) : messages.length ===
@@ -3503,8 +3190,7 @@ export default function Home() {
                             size={17}
                           />
 
-                          Compose a
-                          message
+                          Compose a message
                         </button>
                       )}
                   </div>
@@ -3590,17 +3276,13 @@ export default function Home() {
                           </div>
 
                           <div className="row-avatar">
-                            {getInitial(
-                              sender
-                            )}
+                            <Logo size={24} />
                           </div>
 
                           <div className="row-main">
                             <div className="row-top">
                               <strong>
-                                {
-                                  sender
-                                }
+                                {sender}
                               </strong>
 
                               <span className="row-date">
@@ -3792,47 +3474,48 @@ export default function Home() {
               </button>
             </div>
 
-<div className="compose-fields">
-  <div className="compose-field recipient-field">
-    <div className="recipient-label">
-      <span>
-        To
-      </span>
+            <div className="compose-fields">
+              <div className="compose-field recipient-field">
+                <div className="recipient-label">
+                  <span>
+                    To
+                  </span>
 
-      <div className="recipient-options">
-        {!showCc && (
-          <button
-            className="recipient-option"
-            type="button"
-            onClick={() => {
-              setShowCc(true);
-              setRecipientType("cc");
-              setRecipientQuery("");
-              setRecipientSuggestions([]);
-              setRecipientSuggestionsOpen(false);
-            }}
-          >
-            Cc
-          </button>
-        )}
+                  <div className="recipient-options">
+                    {!showCc && (
+                      <button
+                        className="recipient-option"
+                        type="button"
+                        onClick={() => {
+                          setShowCc(true);
+                          setRecipientType("cc");
+                          setRecipientQuery("");
+                          setRecipientSuggestions([]);
+                          setRecipientSuggestionsOpen(false);
+                        }}
+                      >
+                        Cc
+                      </button>
+                    )}
 
-        {!showBcc && (
-          <button
-            className="recipient-option"
-            type="button"
-            onClick={() => {
-              setShowBcc(true);
-              setRecipientType("bcc");
-              setRecipientQuery("");
-              setRecipientSuggestions([]);
-              setRecipientSuggestionsOpen(false);
-            }}
-          >
-            Bcc
-          </button>
-        )}
-      </div>
-    </div>
+                    {!showBcc && (
+                      <button
+                        className="recipient-option"
+                        type="button"
+                        onClick={() => {
+                          setShowBcc(true);
+                          setRecipientType("bcc");
+                          setRecipientQuery("");
+                          setRecipientSuggestions([]);
+                          setRecipientSuggestionsOpen(false);
+                        }}
+                      >
+                        Bcc
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div
                   className={`recipient-composer ${
                     recipientSuggestionsOpen
@@ -3841,19 +3524,13 @@ export default function Home() {
                   }`}
                 >
                   {recipientChips.map(
-                    (
-                      recipient
-                    ) => (
+                    (recipient) => (
                       <span
                         className="recipient-chip"
-                        key={
-                          recipient
-                        }
+                        key={recipient}
                       >
                         <span>
-                          {
-                            recipient
-                          }
+                          {recipient}
                         </span>
 
                         <button
@@ -3878,15 +3555,12 @@ export default function Home() {
                     }
                     className="recipient-input"
                     value={
-                      recipientType ===
-                      "to"
+                      recipientType === "to"
                         ? recipientQuery
                         : ""
                     }
                     onFocus={() => {
-                      setRecipientType(
-                        "to"
-                      );
+                      setRecipientType("to");
 
                       if (
                         recipientQuery.trim()
@@ -3896,25 +3570,16 @@ export default function Home() {
                         );
                       }
                     }}
-                    onChange={(
-                      event
-                    ) => {
-                      setRecipientType(
-                        "to"
-                      );
-
+                    onChange={(event) => {
+                      setRecipientType("to");
                       setRecipientQuery(
-                        event.target
-                          .value
+                        event.target.value
                       );
-
                       setRecipientSuggestionsOpen(
                         true
                       );
                     }}
-                    onKeyDown={(
-                      event
-                    ) =>
+                    onKeyDown={(event) =>
                       handleRecipientKeyDown(
                         event,
                         "to"
@@ -3985,9 +3650,7 @@ export default function Home() {
                                   }
                                 >
                                   <div className="recipient-suggestion-avatar">
-                                    {getInitial(
-                                      recipientName
-                                    )}
+                                    <Logo size={22} />
                                   </div>
 
                                   <div>
@@ -4023,9 +3686,7 @@ export default function Home() {
                       className="recipient-remove-field"
                       type="button"
                       onClick={() => {
-                        setShowCc(
-                          false
-                        );
+                        setShowCc(false);
                         setCcChips([]);
                       }}
                     >
@@ -4035,19 +3696,13 @@ export default function Home() {
 
                   <div className="recipient-composer">
                     {ccChips.map(
-                      (
-                        recipient
-                      ) => (
+                      (recipient) => (
                         <span
                           className="recipient-chip"
-                          key={
-                            recipient
-                          }
+                          key={recipient}
                         >
                           <span>
-                            {
-                              recipient
-                            }
+                            {recipient}
                           </span>
 
                           <button
@@ -4069,39 +3724,24 @@ export default function Home() {
                     <input
                       className="recipient-input"
                       value={
-                        recipientType ===
-                        "cc"
+                        recipientType === "cc"
                           ? recipientQuery
                           : ""
                       }
                       onFocus={() => {
-                        setRecipientType(
-                          "cc"
-                        );
-
-                        setRecipientQuery(
-                          ""
-                        );
+                        setRecipientType("cc");
+                        setRecipientQuery("");
                       }}
-                      onChange={(
-                        event
-                      ) => {
-                        setRecipientType(
-                          "cc"
-                        );
-
+                      onChange={(event) => {
+                        setRecipientType("cc");
                         setRecipientQuery(
-                          event.target
-                            .value
+                          event.target.value
                         );
-
                         setRecipientSuggestionsOpen(
                           true
                         );
                       }}
-                      onKeyDown={(
-                        event
-                      ) =>
+                      onKeyDown={(event) =>
                         handleRecipientKeyDown(
                           event,
                           "cc"
@@ -4125,9 +3765,7 @@ export default function Home() {
                       className="recipient-remove-field"
                       type="button"
                       onClick={() => {
-                        setShowBcc(
-                          false
-                        );
+                        setShowBcc(false);
                         setBccChips([]);
                       }}
                     >
@@ -4137,19 +3775,13 @@ export default function Home() {
 
                   <div className="recipient-composer">
                     {bccChips.map(
-                      (
-                        recipient
-                      ) => (
+                      (recipient) => (
                         <span
                           className="recipient-chip"
-                          key={
-                            recipient
-                          }
+                          key={recipient}
                         >
                           <span>
-                            {
-                              recipient
-                            }
+                            {recipient}
                           </span>
 
                           <button
@@ -4171,39 +3803,24 @@ export default function Home() {
                     <input
                       className="recipient-input"
                       value={
-                        recipientType ===
-                        "bcc"
+                        recipientType === "bcc"
                           ? recipientQuery
                           : ""
                       }
                       onFocus={() => {
-                        setRecipientType(
-                          "bcc"
-                        );
-
-                        setRecipientQuery(
-                          ""
-                        );
+                        setRecipientType("bcc");
+                        setRecipientQuery("");
                       }}
-                      onChange={(
-                        event
-                      ) => {
-                        setRecipientType(
-                          "bcc"
-                        );
-
+                      onChange={(event) => {
+                        setRecipientType("bcc");
                         setRecipientQuery(
-                          event.target
-                            .value
+                          event.target.value
                         );
-
                         setRecipientSuggestionsOpen(
                           true
                         );
                       }}
-                      onKeyDown={(
-                        event
-                      ) =>
+                      onKeyDown={(event) =>
                         handleRecipientKeyDown(
                           event,
                           "bcc"
@@ -4225,12 +3842,9 @@ export default function Home() {
                   value={
                     composeSubject
                   }
-                  onChange={(
-                    event
-                  ) =>
+                  onChange={(event) =>
                     setComposeSubject(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   placeholder="Subject"
@@ -4239,12 +3853,9 @@ export default function Home() {
 
               <textarea
                 value={composeBody}
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   setComposeBody(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 placeholder="Write your message..."
@@ -4263,8 +3874,7 @@ export default function Home() {
                 type="submit"
                 disabled={
                   sending ||
-                  recipientChips.length ===
-                    0
+                  recipientChips.length === 0
                 }
               >
                 {sending
@@ -4290,8 +3900,7 @@ export default function Home() {
           }`}
         >
           <span className="mail-toast-icon">
-            {toast.type ===
-            "error" ? (
+            {toast.type === "error" ? (
               "!"
             ) : (
               <Icon
@@ -4322,3 +3931,4 @@ export default function Home() {
     </main>
   );
 }
+
