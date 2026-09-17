@@ -3792,46 +3792,47 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="compose-fields">
-              <div className="compose-field recipient-field">
-                <div className="recipient-label">
-                  <span>
-                    To
-                  </span>
+<div className="compose-fields">
+  <div className="compose-field recipient-field">
+    <div className="recipient-label">
+      <span>
+        To
+      </span>
 
-<div className="recipient-options">
-  {!showCc && (
-    <button
-      className="recipient-option"
-      type="button"
-      onClick={() => {
-        setShowCc(true);
-        setRecipientType("cc");
-        setRecipientQuery("");
-        setRecipientSuggestions([]);
-        setRecipientSuggestionsOpen(false);
-      }}
-    >
-      Cc
-    </button>
-  )}
+      <div className="recipient-options">
+        {!showCc && (
+          <button
+            className="recipient-option"
+            type="button"
+            onClick={() => {
+              setShowCc(true);
+              setRecipientType("cc");
+              setRecipientQuery("");
+              setRecipientSuggestions([]);
+              setRecipientSuggestionsOpen(false);
+            }}
+          >
+            Cc
+          </button>
+        )}
 
-  {!showBcc && (
-    <button
-      className="recipient-option"
-      type="button"
-      onClick={() => {
-        setShowBcc(true);
-        setRecipientType("bcc");
-        setRecipientQuery("");
-        setRecipientSuggestions([]);
-        setRecipientSuggestionsOpen(false);
-      }}
-    >
-      Bcc
-    </button>
-  )}
-</div>
+        {!showBcc && (
+          <button
+            className="recipient-option"
+            type="button"
+            onClick={() => {
+              setShowBcc(true);
+              setRecipientType("bcc");
+              setRecipientQuery("");
+              setRecipientSuggestions([]);
+              setRecipientSuggestionsOpen(false);
+            }}
+          >
+            Bcc
+          </button>
+        )}
+      </div>
+    </div>
                 <div
                   className={`recipient-composer ${
                     recipientSuggestionsOpen
