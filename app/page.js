@@ -32,7 +32,8 @@ function Logo({ className = "", size = 32, alt = "Fades" }) {
       className={`fades-logo ${className}`}
       style={{
         width: size,
-        height: size,
+        height: "auto",
+        objectFit: "contain",
       }}
     />
   );
