@@ -3832,7 +3832,6 @@ export default function Home() {
     </button>
   )}
 </div>
-
                 <div
                   className={`recipient-composer ${
                     recipientSuggestionsOpen
