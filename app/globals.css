@@ -279,11 +279,18 @@ textarea:focus-visible {
 }
 
 .auth-card-top {
+  position: absolute;
+  top: 45px;
+  right: 31px;
+
   display: flex;
   justify-content: flex-end;
 
-  margin-bottom: 0px;
+  margin: 0;
+
+  z-index: 2;
 }
+
 
 .auth-pill {
   display: inline-flex;
@@ -317,6 +324,10 @@ textarea:focus-visible {
   background: none;
 
   box-shadow: none;
+}
+
+.auth-heading {
+  padding-top: 15px;
 }
 
 .auth-heading h1 {
