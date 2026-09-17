@@ -66,44 +66,281 @@ function getPreview(message) {
 }
 
 export default function Home() {
-  const [mailboxes, setMailboxes] = useState([]);
+  /*
+   * ==========================================
+   * AUTHENTICATION
+   * ==========================================
+   */
+
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+
+  const [authMode, setAuthMode] = useState("signin");
+
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] =
+    useState(false);
+
+  /*
+   * ==========================================
+   * MAILBOX
+   * ==========================================
+   */
+
   const [mailbox, setMailbox] = useState(null);
 
   const [folders, setFolders] = useState([]);
-  const [activeFolder, setActiveFolder] = useState("inbox");
+  const [activeFolder, setActiveFolder] =
+    useState("inbox");
 
   const [messages, setMessages] = useState([]);
-  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [selectedMessage, setSelectedMessage] =
+    useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [messagesLoading, setMessagesLoading] =
+    useState(false);
+
+  const [mailError, setMailError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] =
+    useState(false);
 
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeTo, setComposeTo] = useState("");
-  const [composeSubject, setComposeSubject] = useState("");
-  const [composeBody, setComposeBody] = useState("");
+  /*
+   * ==========================================
+   * COMPOSE
+   * ==========================================
+   */
+
+  const [composeOpen, setComposeOpen] =
+    useState(false);
+
+  const [composeTo, setComposeTo] =
+    useState("");
+
+  const [composeSubject, setComposeSubject] =
+    useState("");
+
+  const [composeBody, setComposeBody] =
+    useState("");
+
   const [sending, setSending] = useState(false);
+
+  /*
+   * ==========================================
+   * CURRENT FOLDER
+   * ==========================================
+   */
 
   const currentFolder = useMemo(() => {
     return (
-      folders.find((folder) => folder.type === activeFolder) ||
-      SYSTEM_FOLDERS.find((folder) => folder.type === activeFolder)
+      folders.find(
+        (folder) => folder.type === activeFolder
+      ) ||
+      SYSTEM_FOLDERS.find(
+        (folder) => folder.type === activeFolder
+      )
     );
   }, [folders, activeFolder]);
 
-  const loadMailboxes = useCallback(async () => {
+  /*
+   * ==========================================
+   * CHECK MAIL AUTH
+   * ==========================================
+   */
+
+  const checkAuth = useCallback(async () => {
     try {
-      setError("");
+      setAuthLoading(true);
 
       const response = await fetch(
-        `${API_URL}/mail/mailboxes`
+        `${API_URL}/auth/me`,
+        {
+          credentials: "include",
+        }
       );
 
       if (!response.ok) {
+        setAuthenticated(false);
+        setUser(null);
+        return;
+      }
+
+      const data = await response.json();
+
+      const authenticatedUser =
+        data?.user || data?.account || data;
+
+      if (
+        !authenticatedUser ||
+        authenticatedUser.error
+      ) {
+        setAuthenticated(false);
+        setUser(null);
+        return;
+      }
+
+      setUser(authenticatedUser);
+      setAuthenticated(true);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Auth check failed:",
+        error
+      );
+
+      setAuthenticated(false);
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  /*
+   * ==========================================
+   * SIGN IN / SIGN UP
+   * ==========================================
+   */
+
+  async function submitAuth(event) {
+    event.preventDefault();
+
+    setAuthError("");
+    setAuthSubmitting(true);
+
+    try {
+      const endpoint =
+        authMode === "signin"
+          ? "/auth/signin"
+          : "/auth/signup";
+
+      const body =
+        authMode === "signin"
+          ? {
+              email: email.trim().toLowerCase(),
+              password,
+            }
+          : {
+              username:
+                username.trim().toLowerCase(),
+              email:
+                email.trim().toLowerCase(),
+              password,
+            };
+
+      const response = await fetch(
+        `${API_URL}${endpoint}`,
+        {
+          method: "POST",
+          credentials: "include",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify(body),
+        }
+      );
+
+      const data = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "Authentication failed."
+        );
+      }
+
+      const authenticatedUser =
+        data?.user ||
+        data?.account ||
+        data;
+
+      setUser(authenticatedUser);
+      setAuthenticated(true);
+
+      setPassword("");
+      setAuthError("");
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Authentication error:",
+        error
+      );
+
+      setAuthError(
+        error.message ||
+          "Unable to authenticate."
+      );
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  /*
+   * ==========================================
+   * LOGOUT
+   * ==========================================
+   */
+
+  async function logout() {
+    try {
+      await fetch(
+        `${API_URL}/auth/logout`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Logout failed:",
+        error
+      );
+    }
+
+    setAuthenticated(false);
+    setUser(null);
+    setMailbox(null);
+    setFolders([]);
+    setMessages([]);
+    setSelectedMessage(null);
+  }
+
+  /*
+   * ==========================================
+   * LOAD CURRENT USER'S MAILBOX
+   * ==========================================
+   */
+
+  const loadMailbox = useCallback(async () => {
+    try {
+      setMailError("");
+
+      const response = await fetch(
+        `${API_URL}/mail/me`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setAuthenticated(false);
+          setUser(null);
+        }
+
         throw new Error(
           `Mailbox request failed (${response.status})`
         );
@@ -111,29 +348,56 @@ export default function Home() {
 
       const data = await response.json();
 
-      const items = Array.isArray(data)
-        ? data
-        : data.mailboxes || [];
+      const currentMailbox =
+        data?.mailbox ||
+        data;
 
-      setMailboxes(items);
-
-      if (items.length > 0) {
-        setMailbox(items[0]);
+      if (
+        !currentMailbox ||
+        !currentMailbox.id
+      ) {
+        throw new Error(
+          "No mailbox is associated with this account."
+        );
       }
-    } catch (err) {
-      console.error(err);
-      setError(
-        "Unable to connect to Fades Mail. Make sure the mail API is online."
+
+      setMailbox(currentMailbox);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Mailbox error:",
+        error
+      );
+
+      setMailbox(null);
+
+      setMailError(
+        error.message ||
+          "Unable to load your mailbox."
       );
     }
   }, []);
+
+  useEffect(() => {
+    if (!authenticated) return;
+
+    loadMailbox();
+  }, [authenticated, loadMailbox]);
+
+  /*
+   * ==========================================
+   * LOAD FOLDERS
+   * ==========================================
+   */
 
   const loadFolders = useCallback(async () => {
     if (!mailbox?.id) return;
 
     try {
       const response = await fetch(
-        `${API_URL}/mail/folders?mailboxId=${mailbox.id}`
+        `${API_URL}/mail/folders?mailboxId=${mailbox.id}`,
+        {
+          credentials: "include",
+        }
       );
 
       if (!response.ok) {
@@ -149,10 +413,25 @@ export default function Home() {
         : data.folders || [];
 
       setFolders(items);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Folder error:",
+        error
+      );
     }
   }, [mailbox]);
+
+  useEffect(() => {
+    if (!mailbox) return;
+
+    loadFolders();
+  }, [mailbox, loadFolders]);
+
+  /*
+   * ==========================================
+   * LOAD MESSAGES
+   * ==========================================
+   */
 
   const loadMessages = useCallback(async () => {
     if (!mailbox?.id) return;
@@ -162,26 +441,43 @@ export default function Home() {
     try {
       const params = new URLSearchParams();
 
-      params.set("mailboxId", mailbox.id);
+      params.set(
+        "mailboxId",
+        String(mailbox.id)
+      );
 
       if (activeFolder === "starred") {
         params.set("starred", "true");
       } else if (activeFolder) {
-        params.set("folder", activeFolder);
+        params.set(
+          "folder",
+          activeFolder
+        );
       }
 
       if (search.trim()) {
-        params.set("search", search.trim());
+        params.set(
+          "search",
+          search.trim()
+        );
       }
 
       params.set("limit", "100");
       params.set("offset", "0");
 
       const response = await fetch(
-        `${API_URL}/mail/messages?${params.toString()}`
+        `${API_URL}/mail/messages?${params.toString()}`,
+        {
+          credentials: "include",
+        }
       );
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setAuthenticated(false);
+          setUser(null);
+        }
+
         throw new Error(
           `Message request failed (${response.status})`
         );
@@ -194,23 +490,21 @@ export default function Home() {
         : data.messages || [];
 
       setMessages(items);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Message error:",
+        error
+      );
+
       setMessages([]);
     } finally {
       setMessagesLoading(false);
     }
-  }, [mailbox, activeFolder, search]);
-
-  useEffect(() => {
-    loadMailboxes();
-  }, [loadMailboxes]);
-
-  useEffect(() => {
-    if (!mailbox) return;
-
-    loadFolders();
-  }, [mailbox, loadFolders]);
+  }, [
+    mailbox,
+    activeFolder,
+    search,
+  ]);
 
   useEffect(() => {
     if (!mailbox) return;
@@ -218,12 +512,21 @@ export default function Home() {
     loadMessages();
   }, [mailbox, loadMessages]);
 
+  /*
+   * ==========================================
+   * OPEN MESSAGE
+   * ==========================================
+   */
+
   async function openMessage(message) {
     if (!mailbox?.id) return;
 
     try {
       const response = await fetch(
-        `${API_URL}/mail/messages/${message.id}?mailboxId=${mailbox.id}`
+        `${API_URL}/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
+        {
+          credentials: "include",
+        }
       );
 
       if (!response.ok) {
@@ -234,16 +537,23 @@ export default function Home() {
 
       const data = await response.json();
 
-      setSelectedMessage(data.message || data);
+      const openedMessage =
+        data?.message || data;
+
+      setSelectedMessage(openedMessage);
 
       if (!message.isRead) {
         await fetch(
           `${API_URL}/mail/messages/${message.id}/read`,
           {
             method: "POST",
+            credentials: "include",
+
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type":
+                "application/json",
             },
+
             body: JSON.stringify({
               mailboxId: mailbox.id,
             }),
@@ -251,11 +561,21 @@ export default function Home() {
         );
 
         loadMessages();
+        loadFolders();
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Open message error:",
+        error
+      );
     }
   }
+
+  /*
+   * ==========================================
+   * STAR MESSAGE
+   * ==========================================
+   */
 
   async function toggleStar(message) {
     if (!mailbox?.id) return;
@@ -265,52 +585,85 @@ export default function Home() {
       : "star";
 
     try {
-      await fetch(
+      const response = await fetch(
         `${API_URL}/mail/messages/${message.id}/${endpoint}`,
         {
           method: "POST",
+          credentials: "include",
+
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
+
           body: JSON.stringify({
             mailboxId: mailbox.id,
           }),
         }
       );
 
+      if (!response.ok) {
+        throw new Error(
+          `Star request failed (${response.status})`
+        );
+      }
+
       setMessages((current) =>
         current.map((item) =>
           item.id === message.id
             ? {
                 ...item,
-                isStarred: !message.isStarred,
+                isStarred:
+                  !message.isStarred,
               }
             : item
         )
       );
 
-      if (selectedMessage?.id === message.id) {
+      if (
+        selectedMessage?.id ===
+        message.id
+      ) {
         setSelectedMessage((current) => ({
           ...current,
-          isStarred: !message.isStarred,
+          isStarred:
+            !message.isStarred,
         }));
       }
-    } catch (err) {
-      console.error(err);
+
+      loadFolders();
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Star error:",
+        error
+      );
     }
   }
 
-  async function moveMessage(message, folder) {
+  /*
+   * ==========================================
+   * MOVE MESSAGE
+   * ==========================================
+   */
+
+  async function moveMessage(
+    message,
+    folder
+  ) {
     if (!mailbox?.id) return;
 
     try {
-      await fetch(
+      const response = await fetch(
         `${API_URL}/mail/messages/${message.id}/move`,
         {
           method: "POST",
+          credentials: "include",
+
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
+
           body: JSON.stringify({
             mailboxId: mailbox.id,
             folder,
@@ -318,13 +671,29 @@ export default function Home() {
         }
       );
 
+      if (!response.ok) {
+        throw new Error(
+          `Move request failed (${response.status})`
+        );
+      }
+
       setSelectedMessage(null);
+
       await loadMessages();
       await loadFolders();
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Move error:",
+        error
+      );
     }
   }
+
+  /*
+   * ==========================================
+   * SEND MESSAGE
+   * ==========================================
+   */
 
   async function sendMessage(event) {
     event.preventDefault();
@@ -338,21 +707,28 @@ export default function Home() {
     try {
       const recipients = composeTo
         .split(",")
-        .map((email) => email.trim())
+        .map((email) =>
+          email.trim()
+        )
         .filter(Boolean);
 
       const response = await fetch(
         `${API_URL}/mail/messages`,
         {
           method: "POST",
+          credentials: "include",
+
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
+
           body: JSON.stringify({
             mailboxId: mailbox.id,
             sender: mailbox.email,
             recipients,
-            subject: composeSubject,
+            subject:
+              composeSubject,
             bodyText: composeBody,
             folder: "sent",
           }),
@@ -360,7 +736,9 @@ export default function Home() {
       );
 
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
+        const data = await response
+          .json()
+          .catch(() => null);
 
         throw new Error(
           data?.message ||
@@ -373,16 +751,31 @@ export default function Home() {
       setComposeBody("");
       setComposeOpen(false);
 
+      await loadFolders();
+
       if (activeFolder === "sent") {
         await loadMessages();
       }
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Unable to send message.");
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Send error:",
+        error
+      );
+
+      alert(
+        error.message ||
+          "Unable to send message."
+      );
     } finally {
       setSending(false);
     }
   }
+
+  /*
+   * ==========================================
+   * FOLDER SELECTION
+   * ==========================================
+   */
 
   function selectFolder(type) {
     setSelectedMessage(null);
@@ -395,35 +788,264 @@ export default function Home() {
     setSelectedMessage(null);
   }
 
+  /*
+   * ==========================================
+   * UNREAD COUNT
+   * ==========================================
+   */
+
   const unreadCount = folders.reduce(
     (total, folder) =>
-      total + Number(folder.unreadCount || 0),
+      total +
+      Number(folder.unreadCount || 0),
     0
   );
 
+  /*
+   * ==========================================
+   * AUTH LOADING SCREEN
+   * ==========================================
+   */
+
+  if (authLoading) {
+    return (
+      <main className="auth-page">
+        <div className="auth-loading">
+          <div className="auth-logo">
+            F
+          </div>
+
+          <div className="spinner" />
+
+          <p>
+            Checking Fades Mail...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ==========================================
+   * SIGN IN / SIGN UP SCREEN
+   * ==========================================
+   */
+
+  if (!authenticated) {
+    return (
+      <main className="auth-page">
+        <div className="auth-container">
+
+          <div className="auth-brand">
+            <div className="auth-logo">
+              F
+            </div>
+
+            <div>
+              <strong>
+                Fades Mail
+              </strong>
+
+              <span>
+                Your email. Your mailbox.
+              </span>
+            </div>
+          </div>
+
+          <div className="auth-card">
+
+            <div className="auth-heading">
+              <h1>
+                {authMode === "signin"
+                  ? "Welcome back"
+                  : "Create your mailbox"}
+              </h1>
+
+              <p>
+                {authMode === "signin"
+                  ? "Sign in to access your Fades Mail inbox."
+                  : "Create your Fades Mail account and get your @fades.lol address."}
+              </p>
+            </div>
+
+            <form
+              className="auth-form"
+              onSubmit={submitAuth}
+            >
+
+              {authMode === "signup" && (
+                <label>
+                  Username
+
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(event) =>
+                      setUsername(
+                        event.target.value
+                      )
+                    }
+                    placeholder="yourname"
+                    autoComplete="username"
+                    required
+                  />
+
+                  <small>
+                    Your email will be
+                    {" "}
+                    {username
+                      ? `${username.toLowerCase()}@fades.lol`
+                      : "yourname@fades.lol"}
+                  </small>
+                </label>
+              )}
+
+              <label>
+                Email
+
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) =>
+                    setEmail(
+                      event.target.value
+                    )
+                  }
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+
+              <label>
+                Password
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) =>
+                    setPassword(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Your password"
+                  autoComplete={
+                    authMode === "signin"
+                      ? "current-password"
+                      : "new-password"
+                  }
+                  required
+                />
+              </label>
+
+              {authError && (
+                <div className="auth-error">
+                  {authError}
+                </div>
+              )}
+
+              <button
+                className="auth-submit"
+                type="submit"
+                disabled={authSubmitting}
+              >
+                {authSubmitting
+                  ? "Please wait..."
+                  : authMode === "signin"
+                  ? "Sign in"
+                  : "Create mailbox"}
+
+                {!authSubmitting && (
+                  <span>→</span>
+                )}
+              </button>
+            </form>
+
+            <div className="auth-switch">
+              <span>
+                {authMode === "signin"
+                  ? "Don't have an account?"
+                  : "Already have an account?"}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthError("");
+
+                  setAuthMode(
+                    authMode === "signin"
+                      ? "signup"
+                      : "signin"
+                  );
+                }}
+              >
+                {authMode === "signin"
+                  ? "Sign up"
+                  : "Sign in"}
+              </button>
+            </div>
+          </div>
+
+          <div className="auth-footer">
+            <span>
+              Fades Mail
+            </span>
+
+            <span>•</span>
+
+            <span>
+              fades.lol
+            </span>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ==========================================
+   * MAIL APPLICATION
+   * ==========================================
+   */
+
   return (
     <main className="mail-app">
+
       <header className="topbar">
+
         <button
           className="mobile-menu"
-          onClick={() => setSidebarOpen(true)}
+          onClick={() =>
+            setSidebarOpen(true)
+          }
           aria-label="Open menu"
         >
           ☰
         </button>
 
         <div className="brand">
-          <div className="brand-mark">F</div>
-          <span>Fades Mail</span>
+          <div className="brand-mark">
+            F
+          </div>
+
+          <span>
+            Fades Mail
+          </span>
         </div>
 
         <div className="search-box">
-          <span className="search-icon">⌕</span>
+
+          <span className="search-icon">
+            ⌕
+          </span>
 
           <input
             value={search}
             onChange={(event) =>
-              setSearch(event.target.value)
+              setSearch(
+                event.target.value
+              )
             }
             placeholder="Search mail"
           />
@@ -431,7 +1053,9 @@ export default function Home() {
           {search && (
             <button
               className="clear-search"
-              onClick={() => setSearch("")}
+              onClick={() =>
+                setSearch("")
+              }
             >
               ×
             </button>
@@ -439,6 +1063,7 @@ export default function Home() {
         </div>
 
         <div className="top-actions">
+
           <button
             className="icon-button"
             title="Refresh"
@@ -451,27 +1076,54 @@ export default function Home() {
           </button>
 
           <div className="account">
+
             <div className="avatar">
-              {mailbox?.email?.[0]?.toUpperCase() || "F"}
+              {(
+                mailbox?.email ||
+                user?.username ||
+                "F"
+              )[0]?.toUpperCase()}
             </div>
 
             <div className="account-info">
+
               <strong>
-                {mailbox?.email || "Fades Mail"}
+                {mailbox?.email ||
+                  "Fades Mail"}
               </strong>
-              <span>Fades Mail</span>
+
+              <span>
+                {user?.username
+                  ? `@${user.username}`
+                  : "Fades Mail"}
+              </span>
+
             </div>
+
+            <button
+              className="logout-button"
+              onClick={logout}
+              title="Sign out"
+            >
+              ↪
+            </button>
+
           </div>
         </div>
       </header>
 
       <div className="mail-layout">
+
         <aside
           className={`sidebar ${
-            sidebarOpen ? "sidebar-open" : ""
+            sidebarOpen
+              ? "sidebar-open"
+              : ""
           }`}
         >
+
           <div className="sidebar-header">
+
             <button
               className="compose-button"
               onClick={() => {
@@ -485,76 +1137,103 @@ export default function Home() {
 
             <button
               className="close-sidebar"
-              onClick={() => setSidebarOpen(false)}
+              onClick={() =>
+                setSidebarOpen(false)
+              }
             >
               ×
             </button>
+
           </div>
 
           <nav className="folder-nav">
-            {SYSTEM_FOLDERS.map((folder) => {
-              const databaseFolder = folders.find(
-                (item) => item.type === folder.type
-              );
 
-              const unread = Number(
-                databaseFolder?.unreadCount || 0
-              );
+            {SYSTEM_FOLDERS.map(
+              (folder) => {
+                const databaseFolder =
+                  folders.find(
+                    (item) =>
+                      item.type ===
+                      folder.type
+                  );
 
-              return (
-                <button
-                  key={folder.type}
-                  className={`folder-button ${
-                    activeFolder === folder.type
-                      ? "active"
-                      : ""
-                  }`}
-                  onClick={() =>
-                    selectFolder(folder.type)
-                  }
-                >
-                  <span className="folder-icon">
-                    {folder.icon}
-                  </span>
+                const unread =
+                  Number(
+                    databaseFolder?.unreadCount ||
+                      0
+                  );
 
-                  <span className="folder-name">
-                    {folder.name}
-                  </span>
-
-                  {unread > 0 && (
-                    <span className="unread-count">
-                      {unread}
+                return (
+                  <button
+                    key={folder.type}
+                    className={`folder-button ${
+                      activeFolder ===
+                      folder.type
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      selectFolder(
+                        folder.type
+                      )
+                    }
+                  >
+                    <span className="folder-icon">
+                      {folder.icon}
                     </span>
-                  )}
-                </button>
-              );
-            })}
+
+                    <span className="folder-name">
+                      {folder.name}
+                    </span>
+
+                    {unread > 0 && (
+                      <span className="unread-count">
+                        {unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              }
+            )}
+
           </nav>
 
           {folders.filter(
-            (folder) => folder.type === "custom"
+            (folder) =>
+              folder.type === "custom"
           ).length > 0 && (
             <div className="custom-folders">
+
               <div className="section-label">
                 Folders
               </div>
 
               {folders
                 .filter(
-                  (folder) => folder.type === "custom"
+                  (folder) =>
+                    folder.type ===
+                    "custom"
                 )
                 .map((folder) => (
                   <button
                     key={folder.id}
                     className={`folder-button ${
-                      activeFolder === folder.type &&
-                      currentFolder?.id === folder.id
+                      activeFolder ===
+                        folder.type &&
+                      currentFolder?.id ===
+                        folder.id
                         ? "active"
                         : ""
                     }`}
-                    onClick={() =>
-                      setActiveFolder(folder.type)
-                    }
+                    onClick={() => {
+                      setActiveFolder(
+                        folder.type
+                      );
+
+                      setSidebarOpen(
+                        false
+                      );
+                    }}
                   >
                     <span className="folder-icon">
                       ▫
@@ -565,45 +1244,62 @@ export default function Home() {
                     </span>
                   </button>
                 ))}
+
             </div>
           )}
 
           <div className="sidebar-bottom">
+
             <div className="storage-label">
-              <span>Fades Mail</span>
-              <span>Online</span>
+              <span>
+                Fades Mail
+              </span>
+
+              <span>
+                Online
+              </span>
             </div>
 
             <div className="storage-bar">
               <span />
             </div>
+
           </div>
         </aside>
 
         {sidebarOpen && (
           <button
             className="sidebar-overlay"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() =>
+              setSidebarOpen(false)
+            }
             aria-label="Close menu"
           />
         )}
 
         <section className="mail-content">
-          {error && (
+
+          {mailError && (
             <div className="error-banner">
-              {error}
+              {mailError}
             </div>
           )}
 
           {selectedMessage ? (
             <article className="message-view">
+
               <div className="message-toolbar">
+
                 <button
                   className="toolbar-button"
-                  onClick={closeMessage}
+                  onClick={
+                    closeMessage
+                  }
                 >
                   ←
-                  <span>Back</span>
+                  <span>
+                    Back
+                  </span>
                 </button>
 
                 <div className="toolbar-spacer" />
@@ -611,7 +1307,9 @@ export default function Home() {
                 <button
                   className="toolbar-button"
                   onClick={() =>
-                    toggleStar(selectedMessage)
+                    toggleStar(
+                      selectedMessage
+                    )
                   }
                 >
                   <span
@@ -648,23 +1346,28 @@ export default function Home() {
                 >
                   ♲
                 </button>
+
               </div>
 
               <div className="message-header">
+
                 <h1>
                   {selectedMessage.subject ||
                     "(No subject)"}
                 </h1>
 
                 <div className="message-meta">
+
                   <div className="sender-avatar">
                     {getSenderName(
                       selectedMessage.sender,
                       selectedMessage.senderName
-                    )[0]?.toUpperCase() || "?"}
+                    )[0]?.toUpperCase() ||
+                      "?"}
                   </div>
 
                   <div className="sender-details">
+
                     <strong>
                       {getSenderName(
                         selectedMessage.sender,
@@ -682,15 +1385,19 @@ export default function Home() {
                         selectedMessage.recipients
                       )
                         ? selectedMessage.recipients
-                            .map((recipient) =>
-                              typeof recipient ===
-                              "string"
-                                ? recipient
-                                : recipient.address
+                            .map(
+                              (
+                                recipient
+                              ) =>
+                                typeof recipient ===
+                                "string"
+                                  ? recipient
+                                  : recipient.address
                             )
                             .join(", ")
                         : "you"}
                     </span>
+
                   </div>
 
                   <time>
@@ -699,10 +1406,12 @@ export default function Home() {
                         selectedMessage.received_at
                     )}
                   </time>
+
                 </div>
               </div>
 
               <div className="message-body">
+
                 {selectedMessage.bodyHtml ||
                 selectedMessage.body_html ? (
                   <div
@@ -719,19 +1428,25 @@ export default function Home() {
                       ""}
                   </div>
                 )}
+
               </div>
 
               <div className="message-reply">
+
                 <button
                   onClick={() => {
                     setComposeTo(
-                      selectedMessage.sender || ""
+                      selectedMessage.sender ||
+                        ""
                     );
+
                     setComposeSubject(
                       `Re: ${
-                        selectedMessage.subject || ""
+                        selectedMessage.subject ||
+                        ""
                       }`
                     );
+
                     setComposeOpen(true);
                   }}
                 >
@@ -741,52 +1456,73 @@ export default function Home() {
                 <button
                   onClick={() => {
                     setComposeTo(
-                      selectedMessage.sender || ""
+                      selectedMessage.sender ||
+                        ""
                     );
+
                     setComposeSubject(
                       `Fwd: ${
-                        selectedMessage.subject || ""
+                        selectedMessage.subject ||
+                        ""
                       }`
                     );
+
                     setComposeOpen(true);
                   }}
                 >
                   ↪ Forward
                 </button>
+
               </div>
+
             </article>
           ) : (
             <>
+
               <div className="content-header">
+
                 <div>
+
                   <div className="breadcrumb">
-                    Mailbox
+                    {mailbox?.email ||
+                      "Mailbox"}
                   </div>
 
                   <h1>
                     {currentFolder?.name ||
                       activeFolder}
                   </h1>
+
                 </div>
 
                 <div className="content-actions">
                   <span>
                     {messages.length}{" "}
-                    {messages.length === 1
+                    {messages.length ===
+                    1
                       ? "message"
                       : "messages"}
                   </span>
                 </div>
+
               </div>
 
               <div className="message-list">
+
                 {messagesLoading ? (
                   <div className="empty-state">
+
                     <div className="spinner" />
-                    <p>Loading mail...</p>
+
+                    <p>
+                      Loading mail...
+                    </p>
+
                   </div>
-                ) : messages.length === 0 ? (
+                ) : messages.length ===
+                  0 ? (
                   <div className="empty-state">
+
                     <div className="empty-icon">
                       ✉
                     </div>
@@ -804,85 +1540,130 @@ export default function Home() {
                     </p>
 
                     {!search &&
-                      activeFolder === "inbox" && (
+                      activeFolder ===
+                        "inbox" && (
                         <button
                           className="empty-compose"
                           onClick={() =>
-                            setComposeOpen(true)
+                            setComposeOpen(
+                              true
+                            )
                           }
                         >
                           Compose a message
                         </button>
                       )}
+
                   </div>
                 ) : (
-                  messages.map((message) => {
-                    const sender = getSenderName(
-                      message.sender,
-                      message.senderName
-                    );
+                  messages.map(
+                    (message) => {
+                      const sender =
+                        getSenderName(
+                          message.sender,
+                          message.senderName
+                        );
 
-                    const receivedAt =
-                      message.receivedAt ||
-                      message.received_at;
+                      const receivedAt =
+                        message.receivedAt ||
+                        message.received_at;
 
-                    return (
-                      <button
-                        key={message.id}
-                        className={`message-row ${
-                          message.isRead
-                            ? ""
-                            : "unread"
-                        }`}
-                        onClick={() =>
-                          openMessage(message)
-                        }
-                      >
-                        <div className="row-avatar">
-                          {sender[0]?.toUpperCase() ||
-                            "?"}
-                        </div>
-
-                        <div className="row-main">
-                          <div className="row-top">
-                            <strong>{sender}</strong>
-
-                            <span className="row-date">
-                              {formatDate(receivedAt)}
-                            </span>
-                          </div>
-
-                          <div className="row-subject">
-                            {message.subject ||
-                              "(No subject)"}
-                          </div>
-
-                          <div className="row-preview">
-                            {getPreview(message)}
-                          </div>
-                        </div>
-
-                        <button
-                          className={`row-star ${
-                            message.isStarred
-                              ? "starred"
-                              : ""
+                      return (
+                        <div
+                          key={message.id}
+                          className={`message-row ${
+                            message.isRead
+                              ? ""
+                              : "unread"
                           }`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleStar(message);
+                          onClick={() =>
+                            openMessage(
+                              message
+                            )
+                          }
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(
+                            event
+                          ) => {
+                            if (
+                              event.key ===
+                                "Enter" ||
+                              event.key ===
+                                " "
+                            ) {
+                              openMessage(
+                                message
+                              );
+                            }
                           }}
-                          aria-label="Star message"
                         >
-                          ★
-                        </button>
-                      </button>
-                    );
-                  })
+
+                          <div className="row-avatar">
+                            {sender[0]?.toUpperCase() ||
+                              "?"}
+                          </div>
+
+                          <div className="row-main">
+
+                            <div className="row-top">
+
+                              <strong>
+                                {sender}
+                              </strong>
+
+                              <span className="row-date">
+                                {formatDate(
+                                  receivedAt
+                                )}
+                              </span>
+
+                            </div>
+
+                            <div className="row-subject">
+                              {message.subject ||
+                                "(No subject)"}
+                            </div>
+
+                            <div className="row-preview">
+                              {getPreview(
+                                message
+                              )}
+                            </div>
+
+                          </div>
+
+                          <button
+                            className={`row-star ${
+                              message.isStarred
+                                ? "starred"
+                                : ""
+                            }`}
+                            onClick={(
+                              event
+                            ) => {
+                              event.stopPropagation();
+
+                              toggleStar(
+                                message
+                              );
+                            }}
+                            aria-label="Star message"
+                          >
+                            ★
+                          </button>
+
+                        </div>
+                      );
+                    }
+                  )
                 )}
+
               </div>
+
             </>
           )}
+
         </section>
       </div>
 
@@ -891,22 +1672,31 @@ export default function Home() {
           className="compose-backdrop"
           onMouseDown={(event) => {
             if (
-              event.target === event.currentTarget
+              event.target ===
+              event.currentTarget
             ) {
               setComposeOpen(false);
             }
           }}
         >
+
           <form
             className="compose-window"
             onSubmit={sendMessage}
           >
+
             <div className="compose-header">
+
               <div>
-                <strong>New message</strong>
+
+                <strong>
+                  New message
+                </strong>
+
                 <span>
                   {mailbox?.email || ""}
                 </span>
+
               </div>
 
               <button
@@ -917,13 +1707,17 @@ export default function Home() {
               >
                 ×
               </button>
+
             </div>
 
             <div className="compose-fields">
+
               <input
                 value={composeTo}
                 onChange={(event) =>
-                  setComposeTo(event.target.value)
+                  setComposeTo(
+                    event.target.value
+                  )
                 }
                 placeholder="Recipients"
                 required
@@ -942,16 +1736,20 @@ export default function Home() {
               <textarea
                 value={composeBody}
                 onChange={(event) =>
-                  setComposeBody(event.target.value)
+                  setComposeBody(
+                    event.target.value
+                  )
                 }
                 placeholder="Write your message..."
               />
+
             </div>
 
             <div className="compose-footer">
+
               <span>
-                Separate multiple recipients with
-                commas.
+                Separate multiple recipients
+                with commas.
               </span>
 
               <button
@@ -959,13 +1757,22 @@ export default function Home() {
                 type="submit"
                 disabled={sending}
               >
-                {sending ? "Sending..." : "Send"}
-                <span>↗</span>
+                {sending
+                  ? "Sending..."
+                  : "Send"}
+
+                <span>
+                  ↗
+                </span>
               </button>
+
             </div>
+
           </form>
         </div>
       )}
+
     </main>
   );
 }
+
