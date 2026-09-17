@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Fades Mail",
-  description: "Your perfect mail source.",
+  description: "Your perfect mail source",
 };
 
 export default function RootLayout({ children }) {
