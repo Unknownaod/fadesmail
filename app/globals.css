@@ -3552,6 +3552,54 @@ textarea:focus-visible {
 }
 
 
+
+.recipient-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.recipient-option {
+  appearance: none;
+  -webkit-appearance: none;
+
+  border: 0;
+  outline: none;
+
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.55);
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  letter-spacing: 0.01em;
+
+  padding: 4px 7px;
+  margin: 0;
+
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.recipient-option:hover {
+  color: #fff;
+
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.recipient-option:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .recipient-options {
   display: flex;
   align-items: center;
