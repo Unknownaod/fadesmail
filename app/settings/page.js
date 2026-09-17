@@ -202,7 +202,7 @@ export default function SettingsPage() {
   async function loadUser() {
     try {
       const response = await fetch(
-        `${API_URL}/api/user/me`,
+        `${API_URL}/api/auth/me`,
         {
           credentials: "include",
         }
