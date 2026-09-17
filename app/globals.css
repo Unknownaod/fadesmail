@@ -282,7 +282,7 @@ textarea:focus-visible {
   display: flex;
   justify-content: flex-end;
 
-  margin-bottom: 25px;
+  margin-bottom: 10px;
 }
 
 .auth-pill {
