@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -108,14 +109,6 @@ function Icon({ name, size = 18 }) {
       </>
     ),
 
-    archiveAction: (
-      <>
-        <path d="M4 7h16v13H4z" />
-        <path d="M3 4h18v3H3z" />
-        <path d="M9 11h6" />
-      </>
-    ),
-
     reply: (
       <>
         <path d="M9 8 4 12l5 4" />
@@ -138,9 +131,7 @@ function Icon({ name, size = 18 }) {
     ),
 
     menu: (
-      <>
-        <path d="M4 7h16M4 12h16M4 17h16" />
-      </>
+      <path d="M4 7h16M4 12h16M4 17h16" />
     ),
 
     logout: (
@@ -219,6 +210,10 @@ function Icon({ name, size = 18 }) {
         <path d="M17 11a4 4 0 0 0 0-8" />
         <path d="M21 21v-2a4 4 0 0 0-3-3.87" />
       </>
+    ),
+
+    chevronDown: (
+      <path d="m6 9 6 6 6-6" />
     ),
   };
 
@@ -306,6 +301,45 @@ function normalizeRecipient(value) {
   ).trim();
 }
 
+function getRecipientName(recipient) {
+  if (!recipient) return "";
+
+  if (typeof recipient === "string") {
+    return recipient;
+  }
+
+  return (
+    recipient.displayName ||
+    recipient.name ||
+    recipient.username ||
+    normalizeRecipient(recipient)
+  );
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
+  );
+}
+
+function uniqueEmails(values) {
+  const result = [];
+  const seen = new Set();
+
+  for (const value of values || []) {
+    const email = normalizeRecipient(value).toLowerCase();
+
+    if (!email || seen.has(email)) {
+      continue;
+    }
+
+    seen.add(email);
+    result.push(email);
+  }
+
+  return result;
+}
+
 export default function Home() {
   const [authLoading, setAuthLoading] =
     useState(true);
@@ -348,6 +382,9 @@ export default function Home() {
   const [selectedMessage, setSelectedMessage] =
     useState(null);
 
+  const [selectedIds, setSelectedIds] =
+    useState([]);
+
   const [messagesLoading, setMessagesLoading] =
     useState(false);
 
@@ -371,12 +408,6 @@ export default function Home() {
 
   const [sending, setSending] =
     useState(false);
-
-  /*
-   * --------------------------------------------------------------------------
-   * RECIPIENT COMPOSER
-   * --------------------------------------------------------------------------
-   */
 
   const [recipientQuery, setRecipientQuery] =
     useState("");
@@ -405,8 +436,23 @@ export default function Home() {
   const [showBcc, setShowBcc] =
     useState(false);
 
+  const [recipientSuggestionsOpen, setRecipientSuggestionsOpen] =
+    useState(false);
+
+  const [recipientActiveIndex, setRecipientActiveIndex] =
+    useState(-1);
+
   const [actionLoading, setActionLoading] =
     useState(false);
+
+  const [toast, setToast] =
+    useState(null);
+
+  const recipientInputRef =
+    useRef(null);
+
+  const toastTimerRef =
+    useRef(null);
 
   const currentFolder = useMemo(() => {
     return (
@@ -421,10 +467,81 @@ export default function Home() {
     );
   }, [folders, activeFolder]);
 
+  const resolvedActiveFolder =
+    activeFolder.includes(":")
+      ? activeFolder.split(":")[0]
+      : activeFolder;
+
+  const activeCustomFolderId =
+    activeFolder.includes(":")
+      ? activeFolder.split(":")[1]
+      : null;
+
+  const currentFolderForDisplay =
+    activeCustomFolderId
+      ? folders.find(
+          (folder) =>
+            String(folder.id) ===
+            String(
+              activeCustomFolderId
+            )
+        )
+      : currentFolder;
+
+  const unreadCount =
+    folders.reduce(
+      (total, folder) =>
+        total +
+        Number(
+          folder.unreadCount || 0
+        ),
+      0
+    );
+
+  const allVisibleSelected =
+    messages.length > 0 &&
+    messages.every((message) =>
+      selectedIds.includes(
+        message.id
+      )
+    );
+
+  const selectedCount =
+    selectedIds.length;
+
+  function showToast(
+    message,
+    type = "success"
+  ) {
+    setToast({
+      message,
+      type,
+    });
+
+    if (toastTimerRef.current) {
+      clearTimeout(
+        toastTimerRef.current
+      );
+    }
+
+    toastTimerRef.current =
+      setTimeout(() => {
+        setToast(null);
+      }, 3200);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(
+          toastTimerRef.current
+        );
+      }
+    };
+  }, []);
+
   /*
-   * --------------------------------------------------------------------------
    * AUTH
-   * --------------------------------------------------------------------------
    */
 
   const checkAuth = useCallback(async () => {
@@ -582,12 +699,11 @@ export default function Home() {
     setFolders([]);
     setMessages([]);
     setSelectedMessage(null);
+    setSelectedIds([]);
   }
 
   /*
-   * --------------------------------------------------------------------------
    * MAILBOX
-   * --------------------------------------------------------------------------
    */
 
   const loadMailbox = useCallback(
@@ -656,9 +772,7 @@ export default function Home() {
   ]);
 
   /*
-   * --------------------------------------------------------------------------
    * FOLDERS
-   * --------------------------------------------------------------------------
    */
 
   const loadFolders = useCallback(
@@ -707,9 +821,7 @@ export default function Home() {
   ]);
 
   /*
-   * --------------------------------------------------------------------------
    * MESSAGES
-   * --------------------------------------------------------------------------
    */
 
   const loadMessages = useCallback(
@@ -728,18 +840,19 @@ export default function Home() {
         );
 
         if (
-          activeFolder === "starred"
+          resolvedActiveFolder ===
+          "starred"
         ) {
           params.set(
             "starred",
             "true"
           );
         } else if (
-          activeFolder
+          resolvedActiveFolder
         ) {
           params.set(
             "folder",
-            activeFolder
+            resolvedActiveFolder
           );
         }
 
@@ -790,6 +903,8 @@ export default function Home() {
             : data.messages || [];
 
         setMessages(items);
+
+        setSelectedIds([]);
       } catch (error) {
         console.error(
           "[Fades Mail] Message error:",
@@ -797,13 +912,14 @@ export default function Home() {
         );
 
         setMessages([]);
+        setSelectedIds([]);
       } finally {
         setMessagesLoading(false);
       }
     },
     [
       mailbox,
-      activeFolder,
+      resolvedActiveFolder,
       search,
     ]
   );
@@ -818,9 +934,7 @@ export default function Home() {
   ]);
 
   /*
-   * --------------------------------------------------------------------------
-   * OPEN MESSAGE
-   * --------------------------------------------------------------------------
+   * MESSAGE OPEN
    */
 
   async function openMessage(message) {
@@ -877,13 +991,16 @@ export default function Home() {
         "[Fades Mail] Open message error:",
         error
       );
+
+      showToast(
+        "Unable to open this message.",
+        "error"
+      );
     }
   }
 
   /*
-   * --------------------------------------------------------------------------
    * STAR
-   * --------------------------------------------------------------------------
    */
 
   async function toggleStar(message) {
@@ -950,20 +1067,27 @@ export default function Home() {
         "[Fades Mail] Star error:",
         error
       );
+
+      showToast(
+        "Unable to update star.",
+        "error"
+      );
     }
   }
 
   /*
-   * --------------------------------------------------------------------------
-   * MOVE MESSAGE
-   * --------------------------------------------------------------------------
+   * MOVE
    */
 
   async function moveMessage(
     message,
-    folder
+    folder,
+    options = {}
   ) {
-    if (!mailbox?.id) return;
+    if (!mailbox?.id) return false;
+
+    const silent =
+      options.silent || false;
 
     setActionLoading(true);
 
@@ -987,53 +1111,85 @@ export default function Home() {
         );
 
       if (!response.ok) {
+        const data =
+          await response
+            .json()
+            .catch(() => null);
+
         throw new Error(
-          `Move request failed (${response.status})`
+          data?.message ||
+            data?.error ||
+            `Move request failed (${response.status})`
         );
       }
 
-      setSelectedMessage(null);
+      if (
+        selectedMessage?.id ===
+        message.id
+      ) {
+        setSelectedMessage(null);
+      }
 
-      await loadMessages();
-      await loadFolders();
+      if (!silent) {
+        await loadMessages();
+        await loadFolders();
+      }
+
+      return true;
     } catch (error) {
       console.error(
         "[Fades Mail] Move error:",
         error
       );
+
+      if (!silent) {
+        showToast(
+          error.message ||
+            "Unable to move message.",
+          "error"
+        );
+      }
+
+      return false;
     } finally {
       setActionLoading(false);
     }
   }
 
   /*
-   * --------------------------------------------------------------------------
    * SPAM
-   * --------------------------------------------------------------------------
    */
 
-  async function markAsSpam(
-    message
-  ) {
-    await moveMessage(
-      message,
-      "spam"
-    );
+  async function markAsSpam(message) {
+    const success =
+      await moveMessage(
+        message,
+        "spam"
+      );
+
+    if (success) {
+      showToast(
+        "Message moved to Spam."
+      );
+    }
   }
 
-  async function markAsNotSpam(
-    message
-  ) {
-    await moveMessage(
-      message,
-      "inbox"
-    );
+  async function markAsNotSpam(message) {
+    const success =
+      await moveMessage(
+        message,
+        "inbox"
+      );
+
+    if (success) {
+      showToast(
+        "Message moved to Inbox."
+      );
+    }
   }
 
   /*
-   * --------------------------------------------------------------------------
    * READ / UNREAD
-   * --------------------------------------------------------------------------
    */
 
   async function toggleRead(
@@ -1105,15 +1261,244 @@ export default function Home() {
         "[Fades Mail] Read toggle error:",
         error
       );
+
+      showToast(
+        "Unable to update message status.",
+        "error"
+      );
     } finally {
       setActionLoading(false);
     }
   }
 
   /*
-   * --------------------------------------------------------------------------
+   * BULK SELECTION
+   */
+
+  function toggleSelectedMessage(
+    messageId
+  ) {
+    setSelectedIds(
+      (current) =>
+        current.includes(messageId)
+          ? current.filter(
+              (id) =>
+                id !== messageId
+            )
+          : [
+              ...current,
+              messageId,
+            ]
+    );
+  }
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedIds([]);
+      return;
+    }
+
+    setSelectedIds(
+      messages.map(
+        (message) =>
+          message.id
+      )
+    );
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+  }
+
+  async function bulkMove(
+    folder
+  ) {
+    if (
+      !mailbox?.id ||
+      selectedIds.length === 0
+    ) {
+      return;
+    }
+
+    const ids = [...selectedIds];
+
+    setActionLoading(true);
+
+    try {
+      const results =
+        await Promise.all(
+          ids.map(
+            async (messageId) => {
+              try {
+                const response =
+                  await fetch(
+                    `${API_URL}/mail/messages/${messageId}/move`,
+                    {
+                      method: "POST",
+                      credentials:
+                        "include",
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+                      },
+                      body: JSON.stringify(
+                        {
+                          mailboxId:
+                            mailbox.id,
+                          folder,
+                        }
+                      ),
+                    }
+                  );
+
+                return response.ok;
+              } catch {
+                return false;
+              }
+            }
+          )
+        );
+
+      const successCount =
+        results.filter(Boolean)
+          .length;
+
+      setSelectedIds([]);
+
+      await loadMessages();
+      await loadFolders();
+
+      if (folder === "spam") {
+        showToast(
+          `${successCount} message${
+            successCount === 1
+              ? ""
+              : "s"
+          } moved to Spam.`
+        );
+      } else if (
+        folder === "trash"
+      ) {
+        showToast(
+          `${successCount} message${
+            successCount === 1
+              ? ""
+              : "s"
+          } moved to Trash.`
+        );
+      } else if (
+        folder === "archive"
+      ) {
+        showToast(
+          `${successCount} message${
+            successCount === 1
+              ? ""
+              : "s"
+          } archived.`
+        );
+      } else {
+        showToast(
+          `${successCount} message${
+            successCount === 1
+              ? ""
+              : "s"
+          } updated.`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Bulk action error:",
+        error
+      );
+
+      showToast(
+        "Unable to complete the bulk action.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function bulkMarkRead() {
+    if (
+      !mailbox?.id ||
+      selectedIds.length === 0
+    ) {
+      return;
+    }
+
+    const ids = [...selectedIds];
+
+    setActionLoading(true);
+
+    try {
+      const results =
+        await Promise.all(
+          ids.map(
+            async (messageId) => {
+              try {
+                const response =
+                  await fetch(
+                    `${API_URL}/mail/messages/${messageId}/read`,
+                    {
+                      method: "POST",
+                      credentials:
+                        "include",
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+                      },
+                      body: JSON.stringify(
+                        {
+                          mailboxId:
+                            mailbox.id,
+                        }
+                      ),
+                    }
+                  );
+
+                return response.ok;
+              } catch {
+                return false;
+              }
+            }
+          )
+        );
+
+      const successCount =
+        results.filter(Boolean)
+          .length;
+
+      setSelectedIds([]);
+
+      await loadMessages();
+      await loadFolders();
+
+      showToast(
+        `${successCount} message${
+          successCount === 1
+            ? ""
+            : "s"
+        } marked as read.`
+      );
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Bulk read error:",
+        error
+      );
+
+      showToast(
+        "Unable to mark messages as read.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  /*
    * RECIPIENT SEARCH
-   * --------------------------------------------------------------------------
    */
 
   const searchRecipients =
@@ -1126,6 +1511,7 @@ export default function Home() {
           setRecipientSuggestions(
             []
           );
+          setRecipientLoading(false);
           return;
         }
 
@@ -1163,8 +1549,44 @@ export default function Home() {
                 data.contacts ||
                 [];
 
+          const existing =
+            new Set(
+              getRecipientList(
+                recipientType
+              ).map((email) =>
+                email.toLowerCase()
+              )
+            );
+
+          const filtered =
+            results.filter(
+              (recipient) => {
+                const address =
+                  normalizeRecipient(
+                    recipient
+                  ).toLowerCase();
+
+                return (
+                  address &&
+                  !existing.has(
+                    address
+                  ) &&
+                  address !==
+                    mailbox?.email?.toLowerCase()
+                );
+              }
+            );
+
           setRecipientSuggestions(
-            results
+            filtered.slice(0, 10)
+          );
+
+          setRecipientSuggestionsOpen(
+            true
+          );
+
+          setRecipientActiveIndex(
+            -1
           );
         } catch (error) {
           console.error(
@@ -1181,13 +1603,22 @@ export default function Home() {
           );
         }
       },
-      []
+      [
+        recipientType,
+        recipientChips,
+        ccChips,
+        bccChips,
+        mailbox,
+      ]
     );
 
   useEffect(() => {
     if (!composeOpen) {
       setRecipientSuggestions(
         []
+      );
+      setRecipientSuggestionsOpen(
+        false
       );
       return;
     }
@@ -1204,13 +1635,12 @@ export default function Home() {
   }, [
     recipientQuery,
     composeOpen,
+    recipientType,
     searchRecipients,
   ]);
 
   /*
-   * --------------------------------------------------------------------------
    * RECIPIENT CHIPS
-   * --------------------------------------------------------------------------
    */
 
   function getRecipientList(
@@ -1251,14 +1681,32 @@ export default function Home() {
     const cleanEmail =
       normalizeRecipient(
         emailAddress
-      ).toLowerCase();
+      )
+        .trim()
+        .toLowerCase();
 
-    if (!cleanEmail) return;
+    if (!cleanEmail) return false;
+
+    if (!isValidEmail(cleanEmail)) {
+      showToast(
+        `"${cleanEmail}" is not a valid email address.`,
+        "error"
+      );
+
+      return false;
+    }
 
     if (
-      !cleanEmail.includes("@")
+      mailbox?.email &&
+      cleanEmail ===
+        mailbox.email.toLowerCase()
     ) {
-      return;
+      showToast(
+        "You cannot send an email to yourself.",
+        "error"
+      );
+
+      return false;
     }
 
     setRecipientList(
@@ -1283,6 +1731,50 @@ export default function Home() {
 
     setRecipientQuery("");
     setRecipientSuggestions([]);
+    setRecipientSuggestionsOpen(
+      false
+    );
+    setRecipientActiveIndex(-1);
+
+    return true;
+  }
+
+  function addTypedRecipients(
+    type
+  ) {
+    const values =
+      recipientQuery
+        .split(/[;,]+/)
+        .map((value) =>
+          value.trim()
+        )
+        .filter(Boolean);
+
+    if (!values.length) {
+      return;
+    }
+
+    let added = false;
+
+    for (const value of values) {
+      if (
+        isValidEmail(value)
+      ) {
+        addRecipient(
+          value,
+          type
+        );
+
+        added = true;
+      }
+    }
+
+    if (!added) {
+      showToast(
+        "Enter a valid email address.",
+        "error"
+      );
+    }
   }
 
   function removeRecipient(
@@ -1304,19 +1796,130 @@ export default function Home() {
     event,
     type
   ) {
-    if (
-      event.key === "Enter" ||
-      event.key === "," ||
-      event.key === "Tab"
-    ) {
-      const value =
-        recipientQuery.trim();
+    const suggestions =
+      recipientSuggestions;
 
-      if (value) {
+    if (
+      event.key ===
+        "ArrowDown" &&
+      suggestions.length
+    ) {
+      event.preventDefault();
+
+      setRecipientSuggestionsOpen(
+        true
+      );
+
+      setRecipientActiveIndex(
+        (current) =>
+          current >=
+          suggestions.length - 1
+            ? 0
+            : current + 1
+      );
+
+      return;
+    }
+
+    if (
+      event.key ===
+        "ArrowUp" &&
+      suggestions.length
+    ) {
+      event.preventDefault();
+
+      setRecipientActiveIndex(
+        (current) =>
+          current <= 0
+            ? suggestions.length - 1
+            : current - 1
+      );
+
+      return;
+    }
+
+    if (
+      event.key === "Escape"
+    ) {
+      setRecipientSuggestionsOpen(
+        false
+      );
+
+      setRecipientActiveIndex(
+        -1
+      );
+
+      return;
+    }
+
+    if (
+      event.key === "Enter"
+    ) {
+      event.preventDefault();
+
+      if (
+        recipientActiveIndex >=
+          0 &&
+        suggestions[
+          recipientActiveIndex
+        ]
+      ) {
+        addRecipient(
+          normalizeRecipient(
+            suggestions[
+              recipientActiveIndex
+            ]
+          ),
+          type
+        );
+
+        return;
+      }
+
+      addTypedRecipients(type);
+      return;
+    }
+
+    if (
+      event.key === "," ||
+      event.key === ";"
+    ) {
+      event.preventDefault();
+
+      addTypedRecipients(type);
+      return;
+    }
+
+    if (
+      event.key === "Tab" &&
+      recipientQuery.trim()
+    ) {
+      if (
+        recipientActiveIndex >=
+          0 &&
+        suggestions[
+          recipientActiveIndex
+        ]
+      ) {
         event.preventDefault();
 
         addRecipient(
-          value,
+          normalizeRecipient(
+            suggestions[
+              recipientActiveIndex
+            ]
+          ),
+          type
+        );
+      } else if (
+        isValidEmail(
+          recipientQuery.trim()
+        )
+      ) {
+        event.preventDefault();
+
+        addRecipient(
+          recipientQuery,
           type
         );
       }
@@ -1340,50 +1943,102 @@ export default function Home() {
     }
   }
 
+  function focusRecipientType(
+    type
+  ) {
+    setRecipientType(type);
+    setRecipientQuery("");
+    setRecipientSuggestions([]);
+    setRecipientSuggestionsOpen(
+      false
+    );
+    setRecipientActiveIndex(-1);
+
+    setTimeout(() => {
+      recipientInputRef.current?.focus();
+    }, 0);
+  }
+
   function openComposer(
     options = {}
   ) {
     const {
       to = [],
+      cc = [],
+      bcc = [],
       subject = "",
       body = "",
     } = options;
 
     setRecipientChips(
-      Array.isArray(to)
-        ? to
-            .map(
-              normalizeRecipient
-            )
-            .filter(Boolean)
-        : to
-        ? [normalizeRecipient(to)]
-        : []
+      uniqueEmails(
+        Array.isArray(to)
+          ? to
+          : to
+          ? [to]
+          : []
+      )
     );
 
-    setCcChips([]);
-    setBccChips([]);
+    setCcChips(
+      uniqueEmails(
+        Array.isArray(cc)
+          ? cc
+          : cc
+          ? [cc]
+          : []
+      )
+    );
+
+    setBccChips(
+      uniqueEmails(
+        Array.isArray(bcc)
+          ? bcc
+          : bcc
+          ? [bcc]
+          : []
+      )
+    );
 
     setRecipientQuery("");
-
-    setRecipientSuggestions(
-      []
+    setRecipientSuggestions([]);
+    setRecipientSuggestionsOpen(
+      false
     );
-
+    setRecipientActiveIndex(-1);
     setRecipientType("to");
 
-    setShowCc(false);
-    setShowBcc(false);
+    setShowCc(
+      Array.isArray(cc)
+        ? cc.length > 0
+        : Boolean(cc)
+    );
+
+    setShowBcc(
+      Array.isArray(bcc)
+        ? bcc.length > 0
+        : Boolean(bcc)
+    );
 
     setComposeSubject(subject);
     setComposeBody(body);
     setComposeOpen(true);
   }
 
+  function closeComposer() {
+    if (sending) return;
+
+    setComposeOpen(false);
+    setRecipientQuery("");
+    setRecipientSuggestions([]);
+    setRecipientSuggestionsOpen(
+      false
+    );
+    setRecipientActiveIndex(-1);
+  }
+
   /*
-   * --------------------------------------------------------------------------
    * SEND
-   * --------------------------------------------------------------------------
    */
 
   async function sendMessage(event) {
@@ -1392,11 +2047,35 @@ export default function Home() {
     if (!mailbox?.id) return;
 
     if (
+      recipientQuery.trim()
+    ) {
+      if (
+        isValidEmail(
+          recipientQuery.trim()
+        )
+      ) {
+        addRecipient(
+          recipientQuery,
+          recipientType
+        );
+      } else {
+        showToast(
+          "Finish or remove the recipient you're typing.",
+          "error"
+        );
+
+        return;
+      }
+    }
+
+    if (
       recipientChips.length === 0
     ) {
-      alert(
-        "Add at least one recipient."
+      showToast(
+        "Add at least one recipient.",
+        "error"
       );
+
       return;
     }
 
@@ -1430,7 +2109,7 @@ export default function Home() {
                 bccChips,
 
               subject:
-                composeSubject,
+                composeSubject.trim(),
 
               bodyText:
                 composeBody,
@@ -1440,12 +2119,12 @@ export default function Home() {
           }
         );
 
-      if (!response.ok) {
-        const data =
-          await response
-            .json()
-            .catch(() => null);
+      const data =
+        await response
+          .json()
+          .catch(() => null);
 
+      if (!response.ok) {
         throw new Error(
           data?.message ||
             data?.error ||
@@ -1456,37 +2135,40 @@ export default function Home() {
       setRecipientChips([]);
       setCcChips([]);
       setBccChips([]);
-
       setRecipientQuery("");
-
-      setRecipientSuggestions(
-        []
+      setRecipientSuggestions([]);
+      setRecipientSuggestionsOpen(
+        false
       );
-
+      setRecipientActiveIndex(-1);
       setShowCc(false);
       setShowBcc(false);
-
       setComposeSubject("");
       setComposeBody("");
-
       setComposeOpen(false);
 
       await loadFolders();
 
       if (
-        activeFolder === "sent"
+        resolvedActiveFolder ===
+        "sent"
       ) {
         await loadMessages();
       }
+
+      showToast(
+        "Message sent successfully."
+      );
     } catch (error) {
       console.error(
         "[Fades Mail] Send error:",
         error
       );
 
-      alert(
+      showToast(
         error.message ||
-          "Unable to send message."
+          "Unable to send message.",
+        "error"
       );
     } finally {
       setSending(false);
@@ -1494,9 +2176,7 @@ export default function Home() {
   }
 
   /*
-   * --------------------------------------------------------------------------
    * FOLDERS
-   * --------------------------------------------------------------------------
    */
 
   function selectFolder(
@@ -1504,6 +2184,7 @@ export default function Home() {
     id = null
   ) {
     setSelectedMessage(null);
+    setSelectedIds([]);
     setSearch("");
 
     setActiveFolder(
@@ -1515,41 +2196,97 @@ export default function Home() {
     setSidebarOpen(false);
   }
 
-  const resolvedActiveFolder =
-    activeFolder.includes(":")
-      ? activeFolder.split(":")[0]
-      : activeFolder;
+  /*
+   * KEYBOARD SHORTCUTS
+   */
 
-  const activeCustomFolderId =
-    activeFolder.includes(":")
-      ? activeFolder.split(":")[1]
-      : null;
+  useEffect(() => {
+    function handleKeyDown(event) {
+      const target =
+        event.target;
 
-  const currentFolderForDisplay =
-    activeCustomFolderId
-      ? folders.find(
-          (folder) =>
-            String(folder.id) ===
-            String(
-              activeCustomFolderId
-            )
-        )
-      : currentFolder;
+      const isTyping =
+        target instanceof
+          HTMLElement &&
+        (target.tagName ===
+          "INPUT" ||
+          target.tagName ===
+            "TEXTAREA" ||
+          target.isContentEditable);
 
-  const unreadCount =
-    folders.reduce(
-      (total, folder) =>
-        total +
-        Number(
-          folder.unreadCount || 0
-        ),
-      0
+      if (
+        event.key === "/" &&
+        !isTyping &&
+        !composeOpen
+      ) {
+        event.preventDefault();
+
+        const searchInput =
+          document.querySelector(
+            ".search-box input"
+          );
+
+        searchInput?.focus();
+
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() ===
+          "c" &&
+        !isTyping &&
+        !composeOpen &&
+        authenticated
+      ) {
+        event.preventDefault();
+
+        openComposer();
+
+        return;
+      }
+
+      if (
+        event.key === "Escape"
+      ) {
+        if (composeOpen) {
+          closeComposer();
+          return;
+        }
+
+        if (selectedMessage) {
+          setSelectedMessage(
+            null
+          );
+          return;
+        }
+
+        if (sidebarOpen) {
+          setSidebarOpen(false);
+        }
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
     );
 
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [
+    authenticated,
+    composeOpen,
+    selectedMessage,
+    sidebarOpen,
+    sending,
+  ]);
+
   /*
-   * --------------------------------------------------------------------------
    * AUTH LOADING
-   * --------------------------------------------------------------------------
    */
 
   if (authLoading) {
@@ -1575,9 +2312,7 @@ export default function Home() {
   }
 
   /*
-   * --------------------------------------------------------------------------
    * AUTH
-   * --------------------------------------------------------------------------
    */
 
   if (!authenticated) {
@@ -1644,8 +2379,7 @@ export default function Home() {
                         event
                       ) =>
                         setUsername(
-                          event
-                            .target
+                          event.target
                             .value
                         )
                       }
@@ -1661,7 +2395,7 @@ export default function Home() {
 
                   <em>
                     Your new address
-                    will be{" "}
+                    will{" "}
                     {username
                       ? `${username.toLowerCase()}@fades.lol`
                       : "yourname@fades.lol"}
@@ -1681,7 +2415,8 @@ export default function Home() {
                     event
                   ) =>
                     setEmail(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   placeholder="you@example.com"
@@ -1702,7 +2437,8 @@ export default function Home() {
                     event
                   ) =>
                     setPassword(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   placeholder="Your password"
@@ -1799,9 +2535,7 @@ export default function Home() {
   }
 
   /*
-   * --------------------------------------------------------------------------
    * MAIL APP
-   * --------------------------------------------------------------------------
    */
 
   return (
@@ -1855,6 +2589,7 @@ export default function Home() {
           {search && (
             <button
               className="clear-search"
+              type="button"
               onClick={() =>
                 setSearch("")
               }
@@ -1871,6 +2606,7 @@ export default function Home() {
         <div className="top-actions">
           <button
             className="icon-button"
+            type="button"
             title="Refresh"
             onClick={() => {
               loadFolders();
@@ -1906,6 +2642,7 @@ export default function Home() {
 
             <button
               className="logout-button"
+              type="button"
               onClick={logout}
               title="Sign out"
             >
@@ -1929,8 +2666,10 @@ export default function Home() {
           <div className="sidebar-header">
             <button
               className="compose-button"
+              type="button"
               onClick={() => {
                 openComposer();
+
                 setSidebarOpen(
                   false
                 );
@@ -1948,6 +2687,7 @@ export default function Home() {
 
             <button
               className="close-sidebar"
+              type="button"
               onClick={() =>
                 setSidebarOpen(
                   false
@@ -2011,6 +2751,7 @@ export default function Home() {
                     key={
                       folder.type
                     }
+                    type="button"
                     className={`folder-button ${
                       active
                         ? "active"
@@ -2080,6 +2821,7 @@ export default function Home() {
                         key={
                           folder.id
                         }
+                        type="button"
                         className={`folder-button ${
                           active
                             ? "active"
@@ -2145,6 +2887,7 @@ export default function Home() {
         {sidebarOpen && (
           <button
             className="sidebar-overlay"
+            type="button"
             onClick={() =>
               setSidebarOpen(
                 false
@@ -2167,6 +2910,7 @@ export default function Home() {
               <div className="message-toolbar">
                 <button
                   className="toolbar-button toolbar-back"
+                  type="button"
                   onClick={() =>
                     setSelectedMessage(
                       null
@@ -2193,6 +2937,7 @@ export default function Home() {
                       ? "is-starred"
                       : ""
                   }`}
+                  type="button"
                   onClick={() =>
                     toggleStar(
                       selectedMessage
@@ -2208,6 +2953,7 @@ export default function Home() {
 
                 <button
                   className="toolbar-icon"
+                  type="button"
                   onClick={() =>
                     toggleRead(
                       selectedMessage
@@ -2234,6 +2980,7 @@ export default function Home() {
 
                 <button
                   className="toolbar-icon"
+                  type="button"
                   onClick={() =>
                     moveMessage(
                       selectedMessage,
@@ -2246,7 +2993,7 @@ export default function Home() {
                   }
                 >
                   <Icon
-                    name="archiveAction"
+                    name="archive"
                     size={18}
                   />
                 </button>
@@ -2255,6 +3002,7 @@ export default function Home() {
                 "spam" ? (
                   <button
                     className="toolbar-icon"
+                    type="button"
                     onClick={() =>
                       markAsNotSpam(
                         selectedMessage
@@ -2272,7 +3020,8 @@ export default function Home() {
                   </button>
                 ) : (
                   <button
-                    className="toolbar-icon"
+                    className="toolbar-icon spam"
+                    type="button"
                     onClick={() =>
                       markAsSpam(
                         selectedMessage
@@ -2292,6 +3041,7 @@ export default function Home() {
 
                 <button
                   className="toolbar-icon danger"
+                  type="button"
                   onClick={() =>
                     moveMessage(
                       selectedMessage,
@@ -2365,25 +3115,30 @@ export default function Home() {
                           : "you"}
                       </span>
 
-                      {(selectedMessage.cc ||
-                        selectedMessage.bcc) && (
-                        <span className="recipient-line">
-                          {selectedMessage.cc &&
-                            `Cc ${selectedMessage.cc
+                      {Array.isArray(
+                        selectedMessage.cc
+                      ) &&
+                        selectedMessage.cc.length >
+                          0 && (
+                          <span className="recipient-line">
+                            Cc{" "}
+                            {selectedMessage.cc
                               .map(
                                 normalizeRecipient
                               )
                               .join(
                                 ", "
-                              )}`}
-                        </span>
-                      )}
+                              )}
+                          </span>
+                        )}
                     </div>
 
                     <time>
                       {formatDate(
                         selectedMessage.receivedAt ||
-                          selectedMessage.received_at
+                          selectedMessage.received_at ||
+                          selectedMessage.createdAt ||
+                          selectedMessage.created_at
                       )}
                     </time>
                   </div>
@@ -2410,6 +3165,7 @@ export default function Home() {
 
                 <div className="message-reply">
                   <button
+                    type="button"
                     onClick={() =>
                       openComposer({
                         to: selectedMessage.sender,
@@ -2424,10 +3180,12 @@ export default function Home() {
                       name="reply"
                       size={17}
                     />
+
                     Reply
                   </button>
 
                   <button
+                    type="button"
                     onClick={() =>
                       openComposer({
                         to: selectedMessage.sender,
@@ -2453,10 +3211,12 @@ export default function Home() {
                       name="forward"
                       size={17}
                     />
+
                     Forward
                   </button>
 
                   <button
+                    type="button"
                     onClick={() =>
                       toggleRead(
                         selectedMessage
@@ -2526,6 +3286,156 @@ export default function Home() {
                 </div>
               </div>
 
+              {selectedCount >
+                0 && (
+                <div className="bulk-toolbar">
+                  <div className="bulk-toolbar-left">
+                    <button
+                      className="bulk-select-button"
+                      type="button"
+                      onClick={
+                        toggleSelectAll
+                      }
+                      title={
+                        allVisibleSelected
+                          ? "Clear selection"
+                          : "Select all"
+                      }
+                    >
+                      <span
+                        className={`custom-checkbox ${
+                          allVisibleSelected
+                            ? "checked"
+                            : ""
+                        }`}
+                      >
+                        {allVisibleSelected && (
+                          <Icon
+                            name="check"
+                            size={12}
+                          />
+                        )}
+                      </span>
+                    </button>
+
+                    <span className="bulk-count">
+                      {selectedCount}{" "}
+                      selected
+                    </span>
+                  </div>
+
+                  <div className="bulk-actions">
+                    <button
+                      className="bulk-action"
+                      type="button"
+                      onClick={
+                        bulkMarkRead
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      title="Mark as read"
+                    >
+                      <Icon
+                        name="check"
+                        size={16}
+                      />
+
+                      <span>
+                        Read
+                      </span>
+                    </button>
+
+                    <button
+                      className="bulk-action"
+                      type="button"
+                      onClick={() =>
+                        bulkMove(
+                          "archive"
+                        )
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      title="Archive"
+                    >
+                      <Icon
+                        name="archive"
+                        size={16}
+                      />
+
+                      <span>
+                        Archive
+                      </span>
+                    </button>
+
+                    <button
+                      className="bulk-action spam"
+                      type="button"
+                      onClick={() =>
+                        bulkMove(
+                          "spam"
+                        )
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      title="Report spam"
+                    >
+                      <Icon
+                        name="ban"
+                        size={16}
+                      />
+
+                      <span>
+                        Spam
+                      </span>
+                    </button>
+
+                    <button
+                      className="bulk-action danger"
+                      type="button"
+                      onClick={() =>
+                        bulkMove(
+                          "trash"
+                        )
+                      }
+                      disabled={
+                        actionLoading
+                      }
+                      title="Move to trash"
+                    >
+                      <Icon
+                        name="trash"
+                        size={16}
+                      />
+
+                      <span>
+                        Delete
+                      </span>
+                    </button>
+
+                    <button
+                      className="bulk-action"
+                      type="button"
+                      onClick={
+                        clearSelection
+                      }
+                      title="Clear selection"
+                    >
+                      <Icon
+                        name="close"
+                        size={16}
+                      />
+
+                      <span>
+                        Clear
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="message-list">
                 {messagesLoading ? (
                   <div className="empty-state">
@@ -2583,6 +3493,7 @@ export default function Home() {
                         "inbox" && (
                         <button
                           className="empty-compose"
+                          type="button"
                           onClick={() =>
                             openComposer()
                           }
@@ -2591,6 +3502,7 @@ export default function Home() {
                             name="plus"
                             size={17}
                           />
+
                           Compose a
                           message
                         </button>
@@ -2607,7 +3519,14 @@ export default function Home() {
 
                       const receivedAt =
                         message.receivedAt ||
-                        message.received_at;
+                        message.received_at ||
+                        message.createdAt ||
+                        message.created_at;
+
+                      const isSelected =
+                        selectedIds.includes(
+                          message.id
+                        );
 
                       return (
                         <div
@@ -2618,6 +3537,10 @@ export default function Home() {
                             message.isRead
                               ? ""
                               : "unread"
+                          } ${
+                            isSelected
+                              ? "selected"
+                              : ""
                           }`}
                           onClick={() =>
                             openMessage(
@@ -2635,12 +3558,37 @@ export default function Home() {
                               event.key ===
                                 " "
                             ) {
+                              event.preventDefault();
+
                               openMessage(
                                 message
                               );
                             }
                           }}
                         >
+                          <div
+                            className="row-select"
+                            onClick={(
+                              event
+                            ) =>
+                              event.stopPropagation()
+                            }
+                          >
+                            <input
+                              className="row-check"
+                              type="checkbox"
+                              checked={
+                                isSelected
+                              }
+                              onChange={() =>
+                                toggleSelectedMessage(
+                                  message.id
+                                )
+                              }
+                              aria-label={`Select message from ${sender}`}
+                            />
+                          </div>
+
                           <div className="row-avatar">
                             {getInitial(
                               sender
@@ -2674,60 +3622,110 @@ export default function Home() {
                             </div>
                           </div>
 
-                          <button
-                            className={`row-star ${
-                              message.isStarred
-                                ? "starred"
-                                : ""
-                            }`}
-                            onClick={(
-                              event
-                            ) => {
-                              event.stopPropagation();
+                          <div className="row-actions">
+                            <button
+                              className={`row-star ${
+                                message.isStarred
+                                  ? "starred"
+                                  : ""
+                              }`}
+                              type="button"
+                              onClick={(
+                                event
+                              ) => {
+                                event.stopPropagation();
 
-                              toggleStar(
-                                message
-                              );
-                            }}
-                            aria-label="Star message"
-                          >
-                            <Icon
-                              name="star"
-                              size={17}
-                            />
-                          </button>
+                                toggleStar(
+                                  message
+                                );
+                              }}
+                              aria-label="Star message"
+                            >
+                              <Icon
+                                name="star"
+                                size={17}
+                              />
+                            </button>
 
-                          <button
-                            className="row-action"
-                            onClick={(
-                              event
-                            ) => {
-                              event.stopPropagation();
+                            <button
+                              className="row-action"
+                              type="button"
+                              onClick={(
+                                event
+                              ) => {
+                                event.stopPropagation();
 
-                              toggleRead(
-                                message
-                              );
-                            }}
-                            title={
-                              message.isRead
-                                ? "Mark unread"
-                                : "Mark read"
-                            }
-                            aria-label={
-                              message.isRead
-                                ? "Mark unread"
-                                : "Mark read"
-                            }
-                          >
-                            <Icon
-                              name={
+                                toggleRead(
+                                  message
+                                );
+                              }}
+                              title={
                                 message.isRead
-                                  ? "mail"
-                                  : "check"
+                                  ? "Mark unread"
+                                  : "Mark read"
                               }
-                              size={16}
-                            />
-                          </button>
+                              aria-label={
+                                message.isRead
+                                  ? "Mark unread"
+                                  : "Mark read"
+                              }
+                            >
+                              <Icon
+                                name={
+                                  message.isRead
+                                    ? "mail"
+                                    : "check"
+                                }
+                                size={16}
+                              />
+                            </button>
+
+                            {resolvedActiveFolder !==
+                              "spam" && (
+                              <button
+                                className="row-action spam"
+                                type="button"
+                                onClick={(
+                                  event
+                                ) => {
+                                  event.stopPropagation();
+
+                                  markAsSpam(
+                                    message
+                                  );
+                                }}
+                                title="Report spam"
+                                aria-label="Report spam"
+                              >
+                                <Icon
+                                  name="ban"
+                                  size={16}
+                                />
+                              </button>
+                            )}
+
+                            <button
+                              className="row-action danger"
+                              type="button"
+                              onClick={(
+                                event
+                              ) => {
+                                event.stopPropagation();
+
+                                moveMessage(
+                                  message,
+                                  "trash"
+                                );
+                              }}
+                              title="Delete"
+                              aria-label="Delete message"
+                            >
+                              <Icon
+                                name="trash"
+                                size={16}
+                              />
+                            </button>
+                          </div>
 
                           <div className="row-chevron">
                             <Icon
@@ -2754,9 +3752,7 @@ export default function Home() {
               event.target ===
               event.currentTarget
             ) {
-              setComposeOpen(
-                false
-              );
+              closeComposer();
             }
           }}
         >
@@ -2783,12 +3779,11 @@ export default function Home() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setComposeOpen(
-                    false
-                  )
+                onClick={
+                  closeComposer
                 }
                 aria-label="Close composer"
+                disabled={sending}
               >
                 <Icon
                   name="close"
@@ -2833,7 +3828,13 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="recipient-input">
+                <div
+                  className={`recipient-composer ${
+                    recipientSuggestionsOpen
+                      ? "suggestions-open"
+                      : ""
+                  }`}
+                >
                   {recipientChips.map(
                     (
                       recipient
@@ -2867,17 +3868,29 @@ export default function Home() {
                   )}
 
                   <input
+                    ref={
+                      recipientInputRef
+                    }
+                    className="recipient-input"
                     value={
                       recipientType ===
                       "to"
                         ? recipientQuery
                         : ""
                     }
-                    onFocus={() =>
+                    onFocus={() => {
                       setRecipientType(
                         "to"
-                      )
-                    }
+                      );
+
+                      if (
+                        recipientQuery.trim()
+                      ) {
+                        setRecipientSuggestionsOpen(
+                          true
+                        );
+                      }
+                    }}
                     onChange={(
                       event
                     ) => {
@@ -2888,6 +3901,10 @@ export default function Home() {
                       setRecipientQuery(
                         event.target
                           .value
+                      );
+
+                      setRecipientSuggestionsOpen(
+                        true
                       );
                     }}
                     onKeyDown={(
@@ -2904,81 +3921,90 @@ export default function Home() {
                         : "Search people or enter an email"
                     }
                     autoFocus
+                    autoComplete="off"
                   />
-                </div>
 
-                {recipientType ===
-                  "to" &&
-                  recipientSuggestions.length >
-                    0 && (
-                    <div className="recipient-suggestions">
-                      {recipientSuggestions.map(
-                        (
-                          recipient,
-                          index
-                        ) => {
-                          const recipientEmail =
-                            normalizeRecipient(
-                              recipient
-                            );
+                  {recipientSuggestionsOpen &&
+                    (recipientLoading ||
+                      recipientSuggestions.length >
+                        0) && (
+                      <div className="recipient-suggestions">
+                        {recipientLoading && (
+                          <div className="recipient-search-status">
+                            Searching...
+                          </div>
+                        )}
 
-                          const recipientName =
-                            recipient.displayName ||
-                            recipient.name ||
-                            recipient.username ||
-                            recipientEmail;
+                        {!recipientLoading &&
+                          recipientSuggestions.map(
+                            (
+                              recipient,
+                              index
+                            ) => {
+                              const recipientEmail =
+                                normalizeRecipient(
+                                  recipient
+                                );
 
-                          if (
-                            !recipientEmail
-                          ) {
-                            return null;
-                          }
+                              const recipientName =
+                                getRecipientName(
+                                  recipient
+                                );
 
-                          return (
-                            <button
-                              type="button"
-                              className="recipient-suggestion"
-                              key={`${recipientEmail}-${index}`}
-                              onClick={() =>
-                                addRecipient(
-                                  recipientEmail,
-                                  "to"
-                                )
+                              if (
+                                !recipientEmail
+                              ) {
+                                return null;
                               }
-                            >
-                              <div className="recipient-suggestion-avatar">
-                                {getInitial(
-                                  recipientName
-                                )}
-                              </div>
 
-                              <div>
-                                <strong>
-                                  {
-                                    recipientName
+                              return (
+                                <button
+                                  type="button"
+                                  className={`recipient-suggestion ${
+                                    index ===
+                                    recipientActiveIndex
+                                      ? "active"
+                                      : ""
+                                  }`}
+                                  key={`${recipientEmail}-${index}`}
+                                  onMouseDown={(
+                                    event
+                                  ) =>
+                                    event.preventDefault()
                                   }
-                                </strong>
-
-                                <span>
-                                  {
-                                    recipientEmail
+                                  onClick={() =>
+                                    addRecipient(
+                                      recipientEmail,
+                                      "to"
+                                    )
                                   }
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                  )}
+                                >
+                                  <div className="recipient-suggestion-avatar">
+                                    {getInitial(
+                                      recipientName
+                                    )}
+                                  </div>
 
-                {recipientLoading &&
-                  recipientType ===
-                    "to" && (
-                    <div className="recipient-search-status">
-                      Searching...
-                    </div>
-                  )}
+                                  <div>
+                                    <strong>
+                                      {
+                                        recipientName
+                                      }
+                                    </strong>
+
+                                    <span>
+                                      {
+                                        recipientEmail
+                                      }
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            }
+                          )}
+                      </div>
+                    )}
+                </div>
               </div>
 
               {showCc && (
@@ -2987,9 +4013,22 @@ export default function Home() {
                     <span>
                       Cc
                     </span>
+
+                    <button
+                      className="recipient-remove-field"
+                      type="button"
+                      onClick={() => {
+                        setShowCc(
+                          false
+                        );
+                        setCcChips([]);
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
 
-                  <div className="recipient-input">
+                  <div className="recipient-composer">
                     {ccChips.map(
                       (
                         recipient
@@ -3023,6 +4062,7 @@ export default function Home() {
                     )}
 
                     <input
+                      className="recipient-input"
                       value={
                         recipientType ===
                         "cc"
@@ -3033,6 +4073,7 @@ export default function Home() {
                         setRecipientType(
                           "cc"
                         );
+
                         setRecipientQuery(
                           ""
                         );
@@ -3045,9 +4086,12 @@ export default function Home() {
                         );
 
                         setRecipientQuery(
-                          event
-                            .target
+                          event.target
                             .value
+                        );
+
+                        setRecipientSuggestionsOpen(
+                          true
                         );
                       }}
                       onKeyDown={(
@@ -3059,6 +4103,7 @@ export default function Home() {
                         )
                       }
                       placeholder="Add Cc recipient..."
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -3070,9 +4115,22 @@ export default function Home() {
                     <span>
                       Bcc
                     </span>
+
+                    <button
+                      className="recipient-remove-field"
+                      type="button"
+                      onClick={() => {
+                        setShowBcc(
+                          false
+                        );
+                        setBccChips([]);
+                      }}
+                    >
+                      Remove
+                    </button>
                   </div>
 
-                  <div className="recipient-input">
+                  <div className="recipient-composer">
                     {bccChips.map(
                       (
                         recipient
@@ -3106,6 +4164,7 @@ export default function Home() {
                     )}
 
                     <input
+                      className="recipient-input"
                       value={
                         recipientType ===
                         "bcc"
@@ -3116,6 +4175,7 @@ export default function Home() {
                         setRecipientType(
                           "bcc"
                         );
+
                         setRecipientQuery(
                           ""
                         );
@@ -3128,9 +4188,12 @@ export default function Home() {
                         );
 
                         setRecipientQuery(
-                          event
-                            .target
+                          event.target
                             .value
+                        );
+
+                        setRecipientSuggestionsOpen(
+                          true
                         );
                       }}
                       onKeyDown={(
@@ -3142,6 +4205,7 @@ export default function Home() {
                         )
                       }
                       placeholder="Add Bcc recipient..."
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -3184,8 +4248,9 @@ export default function Home() {
 
             <div className="compose-footer">
               <span>
-                Press Enter or comma
-                to add a recipient.
+                Enter or comma adds a
+                recipient. Use ↑/↓ to
+                navigate suggestions.
               </span>
 
               <button
@@ -3208,6 +4273,45 @@ export default function Home() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`mail-toast ${
+            toast.type === "error"
+              ? "error"
+              : "success"
+          }`}
+        >
+          <span className="mail-toast-icon">
+            {toast.type ===
+            "error" ? (
+              "!"
+            ) : (
+              <Icon
+                name="check"
+                size={15}
+              />
+            )}
+          </span>
+
+          <span>
+            {toast.message}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setToast(null)
+            }
+            aria-label="Dismiss notification"
+          >
+            <Icon
+              name="close"
+              size={14}
+            />
+          </button>
         </div>
       )}
     </main>
