@@ -62,8 +62,8 @@ function Icon({ name, size = 18 }) {
 
   settings: (
     <>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-2.4v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.4 15a1.7 1.7 0 0 0-1.56-1.03H6.75v-2.4h.09A1.7 1.7 0 0 0 8.4 10a1.7 1.7 0 0 0-.34-1.88L8 8.06l1.7-1.7.06.06A1.7 1.7 0 0 0 11.64 6.1a1.7 1.7 0 0 0 1.03-1.56V4h2.4v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.03H21v2.4h-.04A1.7 1.7 0 0 0 19.4 15z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
    </>
    ),
 
@@ -140,11 +140,23 @@ function Icon({ name, size = 18 }) {
       </>
     ),
 
+    replyAll: (
+      <>
+        <path d="M13 8 8 12l5 4" />
+        <path d="M8 12h9a6 6 0 0 1 6 6" />
+        <path d="M4 8v8" />
+      </>
+    ),
+
     forward: (
       <>
         <path d="m15 8 5 4-5 4" />
         <path d="M20 12H10a6 6 0 0 0-6 6" />
       </>
+    ),
+
+    attachment: (
+      <path d="M21.44 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 0 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 0 1-2.6-2.6l8.49-8.48" />
     ),
 
     close: (
@@ -362,6 +374,20 @@ function uniqueEmails(values) {
   return result;
 }
 
+function formatFileSize(bytes) {
+  if (bytes === undefined || bytes === null) return "";
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
@@ -389,6 +415,9 @@ export default function Home() {
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
 
   const [recipientQuery, setRecipientQuery] = useState("");
   const [recipientSuggestions, setRecipientSuggestions] = useState([]);
@@ -426,6 +455,7 @@ export default function Home() {
   
   const recipientInputRef = useRef(null);
   const toastTimerRef = useRef(null);
+  const attachmentInputRef = useRef(null);
 
   const currentFolder = useMemo(() => {
     return (
@@ -616,7 +646,7 @@ setUser(authenticatedUser);
 setAuthenticated(true);
 setPassword("");
 setAuthError("");
-
+    } catch (error) {
       setAuthError(
         error.message ||
           "Unable to authenticate."
@@ -1045,6 +1075,91 @@ setAuthError("");
   }
 
   /*
+   * PERMANENT DELETE (from Trash)
+   */
+
+  async function deleteMessagePermanently(
+    message,
+    options = {}
+  ) {
+    if (!mailbox?.id) return false;
+
+    const silent = options.silent || false;
+
+    setActionLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Delete request failed (${response.status})`
+        );
+      }
+
+      if (selectedMessage?.id === message.id) {
+        setSelectedMessage(null);
+      }
+
+      if (!silent) {
+        await loadMessages();
+        await loadFolders();
+      }
+
+      return true;
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Permanent delete error:",
+        error
+      );
+
+      if (!silent) {
+        showToast(
+          error.message ||
+            "Unable to delete message.",
+          "error"
+        );
+      }
+
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleTrashButton(message) {
+    if (resolvedActiveFolder === "trash") {
+      const confirmed = window.confirm(
+        "Permanently delete this message? This cannot be undone."
+      );
+
+      if (!confirmed) return;
+
+      const success = await deleteMessagePermanently(message);
+
+      if (success) {
+        showToast("Message permanently deleted.");
+      }
+
+      return;
+    }
+
+    await moveMessage(message, "trash");
+  }
+
+  /*
    * SPAM
    */
 
@@ -1363,6 +1478,138 @@ setAuthError("");
 
       showToast(
         "Unable to mark messages as read.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function bulkPermanentDelete() {
+    if (!mailbox?.id || selectedIds.length === 0) {
+      return;
+    }
+
+    const ids = [...selectedIds];
+
+    setActionLoading(true);
+
+    try {
+      const results = await Promise.all(
+        ids.map(async (messageId) => {
+          try {
+            const response = await fetch(
+              `${API_URL}/mail/messages/${messageId}?mailboxId=${mailbox.id}`,
+              {
+                method: "DELETE",
+                credentials: "include",
+              }
+            );
+
+            return response.ok;
+          } catch {
+            return false;
+          }
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+
+      setSelectedIds([]);
+
+      await loadMessages();
+      await loadFolders();
+
+      showToast(
+        `${successCount} message${
+          successCount === 1 ? "" : "s"
+        } permanently deleted.`
+      );
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Bulk permanent delete error:",
+        error
+      );
+
+      showToast(
+        "Unable to delete messages.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleBulkTrashButton() {
+    if (resolvedActiveFolder === "trash") {
+      const confirmed = window.confirm(
+        `Permanently delete ${selectedIds.length} message${
+          selectedIds.length === 1 ? "" : "s"
+        }? This cannot be undone.`
+      );
+
+      if (!confirmed) return;
+
+      await bulkPermanentDelete();
+      return;
+    }
+
+    await bulkMove("trash");
+  }
+
+  async function emptyTrash() {
+    if (!mailbox?.id || messages.length === 0) return;
+
+    const confirmed = window.confirm(
+      "Permanently delete all messages in Trash? This cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    const ids = messages.map((message) => message.id);
+
+    setActionLoading(true);
+
+    try {
+      const results = await Promise.all(
+        ids.map(async (messageId) => {
+          try {
+            const response = await fetch(
+              `${API_URL}/mail/messages/${messageId}?mailboxId=${mailbox.id}`,
+              {
+                method: "DELETE",
+                credentials: "include",
+              }
+            );
+
+            return response.ok;
+          } catch {
+            return false;
+          }
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+
+      setSelectedIds([]);
+      setSelectedMessage(null);
+
+      await loadMessages();
+      await loadFolders();
+
+      showToast(
+        `${successCount} message${
+          successCount === 1 ? "" : "s"
+        } permanently deleted.`
+      );
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Empty trash error:",
+        error
+      );
+
+      showToast(
+        "Unable to empty trash.",
         "error"
       );
     } finally {
@@ -1827,6 +2074,7 @@ setAuthError("");
 
     setComposeSubject(subject);
     setComposeBody(body);
+    setAttachments([]);
     setComposeOpen(true);
   }
 
@@ -1838,6 +2086,75 @@ setAuthError("");
     setRecipientSuggestions([]);
     setRecipientSuggestionsOpen(false);
     setRecipientActiveIndex(-1);
+    setAttachments([]);
+  }
+
+  /*
+   * ATTACHMENTS
+   */
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(reader.result);
+
+      reader.onerror = () =>
+        reject(new Error("Unable to read file."));
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleAttachmentChange(event) {
+    const files = Array.from(event.target.files || []);
+
+    if (files.length === 0) return;
+
+    setAttachmentsLoading(true);
+
+    try {
+      const readFiles = await Promise.all(
+        files.map(async (file) => ({
+          id: `${file.name}-${file.size}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          data: await readFileAsDataUrl(file),
+        }))
+      );
+
+      setAttachments((current) => [
+        ...current,
+        ...readFiles,
+      ]);
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Attachment read error:",
+        error
+      );
+
+      showToast(
+        "Unable to attach that file.",
+        "error"
+      );
+    } finally {
+      setAttachmentsLoading(false);
+
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = "";
+      }
+    }
+  }
+
+  function removeAttachment(id) {
+    setAttachments((current) =>
+      current.filter(
+        (attachment) => attachment.id !== id
+      )
+    );
   }
 
   /*
@@ -1906,6 +2223,14 @@ setAuthError("");
                 composeSubject.trim(),
               bodyText:
                 composeBody,
+              attachments: attachments.map(
+                ({ name, type, size, data }) => ({
+                  name,
+                  type,
+                  size,
+                  data,
+                })
+              ),
               folder: "sent",
             }),
           }
@@ -1935,6 +2260,7 @@ setAuthError("");
       setShowBcc(false);
       setComposeSubject("");
       setComposeBody("");
+      setAttachments([]);
       setComposeOpen(false);
 
       await loadFolders();
@@ -2070,9 +2396,7 @@ setAuthError("");
     return (
       <main className="auth-page">
         <div className="auth-loading-card">
-          <div className="loading-logo">
-            <Logo size={46} />
-          </div>
+          <Logo size={46} />
 
           <div className="spinner" />
 
@@ -2097,9 +2421,7 @@ setAuthError("");
       <main className="auth-page">
         <div className="auth-shell">
           <div className="auth-brand">
-            <div className="auth-brand-mark">
-              <Logo size={40} />
-            </div>
+            <Logo size={40} />
 
             <div>
               <strong>
@@ -2114,15 +2436,6 @@ setAuthError("");
           </div>
 
           <div className="auth-card">
-            <div className="auth-card-top">
-              <div className="auth-pill">
-                <Logo size={25} />
-                <span>
-                  Fades Mail
-                </span>
-              </div>
-            </div>
-
             <div className="auth-heading">
               <h1>
                 {authMode === "signin"
@@ -2314,9 +2627,7 @@ setAuthError("");
         </button>
 
         <div className="brand">
-          <div className="brand-mark">
-            <Logo size={34} />
-          </div>
+          <Logo size={34} />
 
           <div className="brand-copy">
             <strong>
@@ -2395,9 +2706,7 @@ setAuthError("");
   </button>
 
   <div className="account">
-    <div className="avatar avatar-logo">
-      <Logo size={25} />
-    </div>
+    <Logo size={25} />
 
     <div className="account-info">
       <strong>
@@ -2800,12 +3109,15 @@ setAuthError("");
                   className="toolbar-icon danger"
                   type="button"
                   onClick={() =>
-                    moveMessage(
-                      selectedMessage,
-                      "trash"
+                    handleTrashButton(
+                      selectedMessage
                     )
                   }
-                  title="Delete"
+                  title={
+                    resolvedActiveFolder === "trash"
+                      ? "Delete permanently"
+                      : "Delete"
+                  }
                   disabled={
                     actionLoading
                   }
@@ -2834,9 +3146,7 @@ setAuthError("");
                   </div>
 
                   <div className="message-meta">
-                    <div className="sender-avatar">
-                      <Logo size={28} />
-                    </div>
+                    <Logo size={28} />
 
                     <div className="sender-details">
                       <strong>
@@ -2911,6 +3221,58 @@ setAuthError("");
                   )}
                 </div>
 
+                {Array.isArray(
+                  selectedMessage.attachments
+                ) &&
+                  selectedMessage.attachments.length >
+                    0 && (
+                    <div className="message-attachments">
+                      <span className="message-attachments-label">
+                        Attachments
+                      </span>
+
+                      <div className="message-attachments-list">
+                        {selectedMessage.attachments.map(
+                          (attachment, index) => (
+                            <a
+                              key={
+                                attachment.id ||
+                                `${attachment.name}-${index}`
+                              }
+                              className="message-attachment"
+                              href={
+                                attachment.url ||
+                                attachment.data ||
+                                "#"
+                              }
+                              download={attachment.name}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Icon
+                                name="attachment"
+                                size={15}
+                              />
+
+                              <span>
+                                {attachment.name ||
+                                  "Attachment"}
+                              </span>
+
+                              {attachment.size ? (
+                                <em>
+                                  {formatFileSize(
+                                    attachment.size
+                                  )}
+                                </em>
+                              ) : null}
+                            </a>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                 <div className="message-reply">
                   <button
                     type="button"
@@ -2930,6 +3292,54 @@ setAuthError("");
                     />
 
                     Reply
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selfEmail = (
+                        mailbox?.email || ""
+                      ).toLowerCase();
+
+                      const toList = uniqueEmails([
+                        selectedMessage.sender,
+                        ...(Array.isArray(
+                          selectedMessage.recipients
+                        )
+                          ? selectedMessage.recipients
+                          : []),
+                      ]).filter(
+                        (address) =>
+                          address !== selfEmail
+                      );
+
+                      const ccList = uniqueEmails(
+                        Array.isArray(
+                          selectedMessage.cc
+                        )
+                          ? selectedMessage.cc
+                          : []
+                      ).filter(
+                        (address) =>
+                          address !== selfEmail
+                      );
+
+                      openComposer({
+                        to: toList,
+                        cc: ccList,
+                        subject: `Re: ${
+                          selectedMessage.subject ||
+                          ""
+                        }`,
+                      });
+                    }}
+                  >
+                    <Icon
+                      name="replyAll"
+                      size={17}
+                    />
+
+                    Reply all
                   </button>
 
                   <button
@@ -3016,6 +3426,24 @@ setAuthError("");
                 </div>
 
                 <div className="content-actions">
+                  {resolvedActiveFolder ===
+                    "trash" &&
+                    messages.length > 0 && (
+                      <button
+                        className="empty-trash-button"
+                        type="button"
+                        onClick={emptyTrash}
+                        disabled={actionLoading}
+                      >
+                        <Icon
+                          name="trash"
+                          size={15}
+                        />
+
+                        Empty trash
+                      </button>
+                    )}
+
                   <span className="message-count">
                     {messages.length}
                   </span>
@@ -3136,15 +3564,17 @@ setAuthError("");
                     <button
                       className="bulk-action danger"
                       type="button"
-                      onClick={() =>
-                        bulkMove(
-                          "trash"
-                        )
+                      onClick={
+                        handleBulkTrashButton
                       }
                       disabled={
                         actionLoading
                       }
-                      title="Move to trash"
+                      title={
+                        resolvedActiveFolder === "trash"
+                          ? "Delete permanently"
+                          : "Move to trash"
+                      }
                     >
                       <Icon
                         name="trash"
@@ -3152,7 +3582,9 @@ setAuthError("");
                       />
 
                       <span>
-                        Delete
+                        {resolvedActiveFolder === "trash"
+                          ? "Delete forever"
+                          : "Delete"}
                       </span>
                     </button>
 
@@ -3328,9 +3760,7 @@ setAuthError("");
                             />
                           </div>
 
-                          <div className="row-avatar">
-                            <Logo size={24} />
-                          </div>
+                          <Logo size={24} />
 
                           <div className="row-main">
                             <div className="row-top">
@@ -3447,13 +3877,22 @@ setAuthError("");
                               ) => {
                                 event.stopPropagation();
 
-                                moveMessage(
-                                  message,
-                                  "trash"
+                                handleTrashButton(
+                                  message
                                 );
                               }}
-                              title="Delete"
-                              aria-label="Delete message"
+                              title={
+                                resolvedActiveFolder ===
+                                "trash"
+                                  ? "Delete permanently"
+                                  : "Delete"
+                              }
+                              aria-label={
+                                resolvedActiveFolder ===
+                                "trash"
+                                  ? "Delete permanently"
+                                  : "Delete message"
+                              }
                             >
                               <Icon
                                 name="trash"
@@ -3702,9 +4141,7 @@ setAuthError("");
                                     )
                                   }
                                 >
-                                  <div className="recipient-suggestion-avatar">
-                                    <Logo size={22} />
-                                  </div>
+                                  <Logo size={22} />
 
                                   <div>
                                     <strong>
@@ -3913,6 +4350,77 @@ setAuthError("");
                 }
                 placeholder="Write your message..."
               />
+
+              <div className="compose-attachments">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  className="attachment-input"
+                  onChange={handleAttachmentChange}
+                  hidden
+                />
+
+                <button
+                  className="attachment-button"
+                  type="button"
+                  onClick={() =>
+                    attachmentInputRef.current?.click()
+                  }
+                  disabled={attachmentsLoading}
+                >
+                  <Icon
+                    name="attachment"
+                    size={16}
+                  />
+
+                  <span>
+                    {attachmentsLoading
+                      ? "Attaching..."
+                      : "Add attachment"}
+                  </span>
+                </button>
+
+                {attachments.length > 0 && (
+                  <div className="attachment-chip-list">
+                    {attachments.map(
+                      (attachment) => (
+                        <span
+                          className="attachment-chip"
+                          key={attachment.id}
+                        >
+                          <Icon
+                            name="attachment"
+                            size={13}
+                          />
+
+                          <span>
+                            {attachment.name}
+                          </span>
+
+                          <em>
+                            {formatFileSize(
+                              attachment.size
+                            )}
+                          </em>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeAttachment(
+                                attachment.id
+                              )
+                            }
+                            aria-label={`Remove ${attachment.name}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="compose-footer">
@@ -3984,4 +4492,3 @@ setAuthError("");
     </main>
   );
 }
-
