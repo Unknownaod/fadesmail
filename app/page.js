@@ -423,8 +423,6 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
-
-  const recipientInputRef = useRef(null);
   
   const recipientInputRef = useRef(null);
   const toastTimerRef = useRef(null);
