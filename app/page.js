@@ -406,6 +406,29 @@ export default function Home() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    function readTheme() {
+      const saved = localStorage.getItem("fades.mail.darkMode");
+      setTheme(saved === "false" ? "light" : "dark");
+    }
+
+    readTheme();
+
+    window.addEventListener("storage", readTheme);
+    return () => window.removeEventListener("storage", readTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const recipientInputRef = useRef(null);
+  
   const recipientInputRef = useRef(null);
   const toastTimerRef = useRef(null);
 
