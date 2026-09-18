@@ -14,6 +14,66 @@
 
   --settings-danger: #e06b6b;
   --settings-danger-bg: rgba(224, 107, 107, 0.1);
+
+  --settings-text-soft: #e1e1e3;
+  --settings-text-dim: #d7d7d9;
+  --settings-text-faint: #b7b8bc;
+  --settings-icon: #c7c7c9;
+
+  --settings-header-bg: rgba(13, 14, 16, 0.88);
+  --settings-avatar-bg: #111214;
+  --settings-glass: rgba(255, 255, 255, 0.025);
+  --settings-glass-hover: rgba(255, 255, 255, 0.06);
+  --settings-glass-strong: rgba(255, 255, 255, 0.09);
+  --settings-glow: rgba(255, 255, 255, 0.035);
+
+  --settings-toggle-track: #303136;
+  --settings-toggle-track-active: #c1c1c1;
+  --settings-toggle-thumb: #aaa;
+  --settings-toggle-thumb-active: #111214;
+
+  --settings-badge-text: #c6c6c8;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --settings-bg: #f4f4f5;
+  --settings-surface: #ffffff;
+  --settings-surface-2: #f7f7f8;
+  --settings-border: rgba(15, 15, 20, 0.1);
+  --settings-border-hover: rgba(15, 15, 20, 0.16);
+
+  --settings-text: #151517;
+  --settings-muted: #6d6d73;
+  --settings-subtle: #8b8b91;
+
+  --settings-accent: #4a4a4d;
+  --settings-accent-bg: rgba(20, 20, 25, 0.06);
+
+  --settings-danger: #c94b4b;
+  --settings-danger-bg: rgba(201, 75, 75, 0.1);
+
+  --settings-text-soft: #232326;
+  --settings-text-dim: #3a3a3e;
+  --settings-text-faint: #52525a;
+  --settings-icon: #3a3a3e;
+
+  --settings-header-bg: rgba(255, 255, 255, 0.88);
+  --settings-avatar-bg: #f0f0f1;
+  --settings-glass: rgba(15, 15, 20, 0.025);
+  --settings-glass-hover: rgba(15, 15, 20, 0.05);
+  --settings-glass-strong: rgba(15, 15, 20, 0.08);
+  --settings-glow: rgba(15, 15, 20, 0.04);
+
+  --settings-toggle-track: #d8d8db;
+  --settings-toggle-track-active: #2d2d30;
+  --settings-toggle-thumb: #ffffff;
+  --settings-toggle-thumb-active: #ffffff;
+
+  --settings-badge-text: #3a3a3e;
 }
 
 * {
@@ -50,7 +110,7 @@ button {
   background:
     radial-gradient(
       circle at 50% -20%,
-      rgba(255, 255, 255, 0.035),
+      var(--settings-glow),
       transparent 40%
     ),
     var(--settings-bg);
@@ -67,7 +127,7 @@ button {
 
   border-bottom: 1px solid var(--settings-border);
 
-  background: rgba(13, 14, 16, 0.88);
+  background: var(--settings-header-bg);
 
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -129,9 +189,9 @@ button {
   border: 1px solid var(--settings-border);
   border-radius: 9px;
 
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--settings-glass);
 
-  color: #d7d7d9;
+  color: var(--settings-text-dim);
 
   cursor: pointer;
 
@@ -142,7 +202,7 @@ button {
 }
 
 .back-button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--settings-glass-hover);
   border-color: var(--settings-border-hover);
 }
 
@@ -211,7 +271,7 @@ button {
 
 .settings-nav-item:hover {
   color: var(--settings-text);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--settings-glass-hover);
 }
 
 .settings-nav-item.active {
@@ -220,7 +280,7 @@ button {
 }
 
 .settings-nav-item.active svg {
-  color: #d0d0d0;
+  color: var(--settings-icon);
 }
 
 .settings-sidebar-divider {
@@ -307,9 +367,9 @@ button {
   border: 1px solid var(--settings-border);
   border-radius: 9px;
 
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--settings-glass);
 
-  color: #c7c7c9;
+  color: var(--settings-icon);
 }
 
 .section-heading h2 {
@@ -369,7 +429,7 @@ button {
   border: 1px solid var(--settings-border);
   border-radius: 12px;
 
-  background: #111214;
+  background: var(--settings-avatar-bg);
 }
 
 .profile-details strong {
@@ -408,7 +468,7 @@ button {
 .setting-label {
   display: block;
 
-  color: #e1e1e3;
+  color: var(--settings-text-soft);
 
   font-size: 13px;
   font-weight: 550;
@@ -432,7 +492,7 @@ button {
 
   overflow: hidden;
 
-  color: #b7b8bc;
+  color: var(--settings-text-faint);
 
   font-size: 12px;
 
@@ -455,7 +515,7 @@ button {
   border: 0;
   border-radius: 999px;
 
-  background: #303136;
+  background: var(--settings-toggle-track);
 
   cursor: pointer;
 
@@ -470,7 +530,7 @@ button {
 
   border-radius: 50%;
 
-  background: #aaa;
+  background: var(--settings-toggle-thumb);
 
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 
@@ -482,11 +542,11 @@ button {
 }
 
 .settings-toggle.active {
-  background: #c1c1c1;
+  background: var(--settings-toggle-track-active);
 }
 
 .settings-toggle.active span {
-  background: #111214;
+  background: var(--settings-toggle-thumb-active);
   transform: translateX(18px);
 }
 
@@ -512,9 +572,9 @@ button {
 
   border-radius: 10px;
 
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--settings-glass-strong);
 
-  color: #cfcfcf;
+  color: var(--settings-icon);
 }
 
 .security-status > div:nth-child(2) {
@@ -543,12 +603,12 @@ button {
 .security-badge {
   padding: 5px 9px;
 
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--settings-glass-strong);
   border-radius: 999px;
 
-  color: #c6c6c8 !important;
+  color: var(--settings-badge-text) !important;
 
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--settings-glass-hover);
 
   font-size: 10px !important;
   font-weight: 600;
@@ -607,7 +667,7 @@ button {
   align-items: center;
   gap: 8px;
 
-  color: #aaa;
+  color: var(--settings-muted);
 }
 
 .footer-brand img {
@@ -618,7 +678,7 @@ button {
 
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline: 2px solid var(--settings-border-hover);
   outline-offset: 2px;
 }
 
