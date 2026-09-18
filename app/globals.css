@@ -178,6 +178,12 @@ textarea:focus-visible {
   background: var(--overlay-strong);
 }
 
+.fades-logo {
+  display: block;
+
+  flex: 0 0 auto;
+}
+
 /* =========================================
    AUTH
 ========================================= */
@@ -255,47 +261,6 @@ textarea:focus-visible {
   width: fit-content;
 }
 
-.auth-brand-mark {
-  width: 43px;
-  height: 43px;
-  flex: 0 0 43px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  overflow: hidden;
-  border-radius: 50%;
-
-  background:
-    linear-gradient(
-      145deg,
-      var(--overlay-strong),
-      var(--overlay-weak)
-    );
-
-  border: 1px solid var(--overlay-border);
-
-  box-shadow:
-    var(--shadow-soft),
-    inset 0 1px 0 var(--overlay);
-}
-
-.auth-brand-mark img {
-  display: block;
-
-  width: 30px;
-  height: 30px;
-
-  max-width: none;
-  max-height: none;
-
-  object-fit: contain;
-  object-position: center;
-
-  flex-shrink: 0;
-}
-
 .auth-brand strong,
 .auth-brand span {
   display: block;
@@ -356,54 +321,6 @@ textarea:focus-visible {
   );
 
   pointer-events: none;
-}
-
-.auth-card-top {
-  position: absolute;
-  top: 45px;
-  right: 31px;
-
-  display: flex;
-  justify-content: flex-end;
-
-  margin: 0;
-
-  z-index: 2;
-}
-
-
-.auth-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-
-  padding: 5px 10px;
-
-  border: 1px solid var(--line);
-  border-radius: 999px;
-
-  color: var(--muted);
-
-  background: var(--overlay-weak);
-
-  font-size: 10px;
-  font-weight: 600;
-
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-
-  white-space: nowrap;
-}
-
-.auth-pill span {
-  width: auto;
-  height: auto;
-
-  border-radius: 0;
-
-  background: none;
-
-  box-shadow: none;
 }
 
 .auth-heading {
@@ -721,26 +638,8 @@ textarea:focus-visible {
   backdrop-filter: blur(25px);
 }
 
-.loading-logo {
-  width: 48px;
-  height: 48px;
-
-  display: grid;
-  place-items: center;
-
-  margin-bottom: 23px;
-
-  border-radius: 14px;
-
-  color: var(--shine-text);
-
-  background: var(--shine);
-
-  font-weight: 900;
-
-  box-shadow:
-    0 10px 30px rgba(255, 255, 255, 0.07),
-    inset 0 1px 0 var(--overlay-strong);
+.auth-loading-card > .fades-logo {
+  margin-bottom: 20px;
 }
 
 .auth-loading-card p {
@@ -850,27 +749,6 @@ textarea:focus-visible {
   gap: 10px;
 
   min-width: 155px;
-}
-
-.brand-mark {
-  width: 35px;
-  height: 35px;
-
-  display: grid;
-  place-items: center;
-
-  border-radius: 10px;
-
-  color: var(--shine-text);
-
-  background: var(--shine);
-
-  font-size: 15px;
-  font-weight: 900;
-
-  box-shadow:
-    0 8px 25px rgba(255, 255, 255, 0.055),
-    inset 0 1px 0 var(--overlay-strong);
 }
 
 .brand-copy strong,
@@ -1042,33 +920,6 @@ textarea:focus-visible {
 
   box-shadow:
     inset 0 1px 0 var(--overlay-weak);
-}
-
-.avatar,
-.row-avatar,
-.sender-avatar {
-  flex: 0 0 auto;
-
-  display: grid;
-  place-items: center;
-
-  color: var(--shine-text);
-
-  background: var(--shine);
-
-  font-weight: 800;
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-
-.avatar {
-  width: 30px;
-  height: 30px;
-
-  border-radius: 9px;
-
-  font-size: 11px;
 }
 
 .account-info {
@@ -1594,7 +1445,7 @@ textarea:focus-visible {
 .content-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 
   color: var(--muted-2);
 
@@ -1606,6 +1457,48 @@ textarea:focus-visible {
 
   font-size: 11px;
   font-weight: 700;
+}
+
+.empty-trash-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  height: 28px;
+
+  padding: 0 10px;
+
+  margin-right: 4px;
+
+  color: var(--danger);
+
+  background: rgba(255, 104, 104, 0.045);
+
+  border: 1px solid rgba(255, 104, 104, 0.14);
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.empty-trash-button:hover:not(:disabled) {
+  background: rgba(255, 104, 104, 0.09);
+
+  border-color: rgba(255, 104, 104, 0.22);
+}
+
+.empty-trash-button:disabled {
+  cursor: wait;
+
+  opacity: 0.5;
 }
 
 /* =========================================
@@ -1849,15 +1742,6 @@ textarea:focus-visible {
   border-bottom: 2px solid var(--shine-text);
 
   transform: rotate(42deg);
-}
-
-.row-avatar {
-  width: 40px;
-  height: 40px;
-
-  border-radius: 11px;
-
-  font-size: 12px;
 }
 
 .row-main {
@@ -2270,15 +2154,6 @@ textarea:focus-visible {
   gap: 11px;
 }
 
-.sender-avatar {
-  width: 40px;
-  height: 40px;
-
-  border-radius: 11px;
-
-  font-size: 12px;
-}
-
 .sender-details {
   min-width: 0;
 
@@ -2352,6 +2227,80 @@ textarea:focus-visible {
 
 .message-body a:hover {
   text-decoration-color: var(--icon-hover);
+}
+
+/* =========================================
+   MESSAGE ATTACHMENTS
+========================================= */
+
+.message-attachments {
+  padding: 0 34px 26px;
+}
+
+.message-attachments-label {
+  display: block;
+
+  margin-bottom: 10px;
+
+  color: var(--text-faint);
+
+  font-size: 8px;
+  font-weight: 700;
+
+  letter-spacing: 0.1em;
+
+  text-transform: uppercase;
+}
+
+.message-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 8px;
+}
+
+.message-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  padding: 8px 12px;
+
+  color: var(--text-dim);
+
+  background: var(--overlay);
+
+  border: 1px solid var(--line);
+
+  border-radius: 9px;
+
+  text-decoration: none;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.message-attachment:hover {
+  color: var(--icon-hover);
+
+  background: var(--overlay-strong);
+
+  border-color: var(--overlay-border);
+
+  transform: translateY(-1px);
+}
+
+.message-attachment em {
+  color: var(--text-faint);
+
+  font-size: 8px;
+  font-style: normal;
 }
 
 .message-reply {
@@ -2847,25 +2796,6 @@ textarea:focus-visible {
   transform: translateX(1px);
 }
 
-.recipient-suggestion-avatar {
-  width: 34px;
-  height: 34px;
-
-  flex: 0 0 auto;
-
-  display: grid;
-  place-items: center;
-
-  color: var(--shine-text);
-
-  background: var(--shine);
-
-  border-radius: 9px;
-
-  font-size: 10px;
-  font-weight: 800;
-}
-
 .recipient-suggestion-copy {
   min-width: 0;
 
@@ -2967,6 +2897,147 @@ textarea:focus-visible {
 
 .compose-fields textarea::placeholder {
   color: var(--text-faint);
+}
+
+/* =========================================
+   COMPOSE ATTACHMENTS
+========================================= */
+
+.compose-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 14px 0 18px;
+}
+
+.attachment-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  width: fit-content;
+
+  height: 34px;
+
+  padding: 0 12px;
+
+  color: var(--text-dim);
+
+  background: var(--overlay-weak);
+
+  border: 1px solid var(--line);
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.attachment-button:hover {
+  color: var(--icon-hover);
+
+  background: var(--overlay-strong);
+
+  border-color: var(--overlay-border);
+}
+
+.attachment-button:disabled {
+  cursor: wait;
+
+  opacity: 0.55;
+}
+
+.attachment-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 6px;
+}
+
+.attachment-chip {
+  max-width: 260px;
+
+  min-height: 29px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 0 6px 0 9px;
+
+  color: var(--text-soft);
+
+  background:
+    linear-gradient(
+      145deg,
+      var(--overlay-strong),
+      var(--overlay)
+    );
+
+  border: 1px solid var(--overlay-border);
+
+  border-radius: 999px;
+
+  box-shadow:
+    inset 0 1px 0 var(--overlay);
+
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.attachment-chip > span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+
+  max-width: 140px;
+}
+
+.attachment-chip em {
+  color: var(--text-faint);
+
+  font-size: 8px;
+  font-style: normal;
+
+  white-space: nowrap;
+}
+
+.attachment-chip button {
+  width: 18px;
+  height: 18px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  color: var(--text-faint);
+
+  background: transparent;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.attachment-chip button:hover {
+  color: var(--icon-hover);
+
+  background: var(--overlay-strong);
 }
 
 .compose-footer {
@@ -3350,15 +3421,6 @@ textarea:focus-visible {
     height: 7px;
   }
 
-  .row-avatar {
-    width: 34px;
-    height: 34px;
-
-    border-radius: 9px;
-
-    font-size: 10px;
-  }
-
   .row-preview {
     max-width: calc(100vw - 155px);
   }
@@ -3396,6 +3458,10 @@ textarea:focus-visible {
     padding: 25px 19px;
 
     font-size: 12px;
+  }
+
+  .message-attachments {
+    padding: 0 19px 21px;
   }
 
   .message-reply {
@@ -3539,20 +3605,8 @@ textarea:focus-visible {
     padding: 0 9px;
   }
 
-  .brand-mark {
-    width: 31px;
-    height: 31px;
-
-    border-radius: 9px;
-  }
-
   .account {
     padding: 3px;
-  }
-
-  .avatar {
-    width: 28px;
-    height: 28px;
   }
 
   .mail-content {
@@ -3649,6 +3703,7 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
 
     animation-duration: 0.01ms !important;
+
     animation-iteration-count: 1 !important;
 
     transition-duration: 0.01ms !important;
