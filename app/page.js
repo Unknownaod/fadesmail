@@ -406,9 +406,6 @@ export default function Home() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const [actionLoading, setActionLoading] = useState(false);
-  const [toast, setToast] = useState(null);
-
   const [theme, setTheme] = useState("dark");
 
   useEffect(() => {
