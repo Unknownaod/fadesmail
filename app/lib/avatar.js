@@ -12,7 +12,8 @@ export function getSenderDomain(sender) {
 
 /**
  * Ordered list of image URLs to try for a sender:
- *   1. What the API resolved (verified BIMI logo, or Gravatar for personal mail)
+ *   1. What the API resolved (uploaded profile picture, verified BIMI logo,
+ *      or Gravatar for personal mail)
  *   2. Company favicon looked up by the sender's domain
  * When every candidate fails, the component falls back to the sender's initial.
  */
