@@ -1,11 +1,113 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./settings.css";
+import "./avatar-upload.css";
 
 const API_URL =
   process.env.NEXT_PUBLIC_MAIL_API_URL ||
   "https://mail-api.fades.lol";
+
+// Profile picture upload
+const ACCEPTED_AVATAR_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+];
+
+const MAX_AVATAR_SOURCE_BYTES = 10 * 1024 * 1024;
+
+const AVATAR_SIZE = 256;
+
+/*
+ * Crops the chosen image to a centered square, scales it to
+ * 256x256 and re-encodes it (WebP where supported, PNG otherwise).
+ * That keeps uploads tiny and strips metadata such as GPS tags.
+ */
+
+async function prepareAvatar(file) {
+  if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+    throw new Error(
+      "Please choose a PNG, JPEG or WebP image."
+    );
+  }
+
+  if (file.size > MAX_AVATAR_SOURCE_BYTES) {
+    throw new Error(
+      "That image is too large. Choose one under 10 MB."
+    );
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise(
+      (resolve, reject) => {
+        const element = new Image();
+
+        element.onload = () => resolve(element);
+
+        element.onerror = () =>
+          reject(
+            new Error(
+              "That file couldn't be read as an image."
+            )
+          );
+
+        element.src = objectUrl;
+      }
+    );
+
+    const side = Math.min(
+      image.naturalWidth,
+      image.naturalHeight
+    );
+
+    if (!side) {
+      throw new Error(
+        "That file couldn't be read as an image."
+      );
+    }
+
+    const sourceX = (image.naturalWidth - side) / 2;
+    const sourceY = (image.naturalHeight - side) / 2;
+
+    const canvas = document.createElement("canvas");
+
+    canvas.width = AVATAR_SIZE;
+    canvas.height = AVATAR_SIZE;
+
+    const context = canvas.getContext("2d");
+
+    context.imageSmoothingQuality = "high";
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      side,
+      side,
+      0,
+      0,
+      AVATAR_SIZE,
+      AVATAR_SIZE
+    );
+
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/webp", 0.9)
+    );
+
+    if (!blob) {
+      throw new Error(
+        "Your browser couldn't process that image."
+      );
+    }
+
+    return blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 function Logo({ size = 34 }) {
   return (
@@ -138,6 +240,24 @@ export default function SettingsPage() {
   const [conversationGrouping, setConversationGrouping] =
     useState(true);
 
+  // Profile picture
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarDragging, setAvatarDragging] =
+    useState(false);
+
+  const fileInputRef = useRef(null);
+
+  // Shown until the image fails to load (no picture uploaded yet).
+  const avatarSrc =
+    mailbox?.id && !avatarFailed
+      ? `${API_URL}/mail/avatar/${mailbox.id}${
+          avatarVersion ? `?v=${avatarVersion}` : ""
+        }`
+      : "";
+
   useEffect(() => {
     const savedDarkMode =
       localStorage.getItem("fades.mail.darkMode");
@@ -216,6 +336,99 @@ export default function SettingsPage() {
       setMailbox(data.mailbox || null);
     } catch {
       // Settings can still be used if the API is unavailable.
+    }
+  }
+
+  async function uploadAvatar(file) {
+    if (!file || avatarBusy) return;
+
+    if (!mailbox?.id) {
+      setAvatarError(
+        "Sign in again to change your profile picture."
+      );
+
+      return;
+    }
+
+    setAvatarBusy(true);
+    setAvatarError("");
+
+    try {
+      const blob = await prepareAvatar(file);
+
+      const response = await fetch(
+        `${API_URL}/mail/avatar`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": blob.type || "image/png",
+          },
+          body: blob,
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => ({}));
+
+        throw new Error(
+          data.message ||
+            "Upload failed. Please try again."
+        );
+      }
+
+      setAvatarFailed(false);
+      setAvatarVersion(Date.now());
+    } catch (error) {
+      setAvatarError(
+        error?.message ||
+          "Upload failed. Please try again."
+      );
+    } finally {
+      setAvatarBusy(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function removeAvatar() {
+    if (avatarBusy) return;
+
+    setAvatarBusy(true);
+    setAvatarError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/mail/avatar`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => ({}));
+
+        throw new Error(
+          data.message ||
+            "Couldn't remove your picture. Please try again."
+        );
+      }
+
+      setAvatarFailed(true);
+    } catch (error) {
+      setAvatarError(
+        error?.message ||
+          "Couldn't remove your picture. Please try again."
+      );
+    } finally {
+      setAvatarBusy(false);
     }
   }
 
@@ -371,8 +584,24 @@ export default function SettingsPage() {
 
             <div className="settings-card">
               <div className="profile-row">
-                <div className="profile-avatar">
-                  <Logo size={38} />
+                <div
+                  className={`profile-avatar ${
+                    avatarSrc ? "has-image" : ""
+                  }`}
+                >
+                  {avatarSrc ? (
+                    <img
+                      key={avatarSrc}
+                      className="profile-avatar-image"
+                      src={avatarSrc}
+                      alt="Your profile picture"
+                      onError={() =>
+                        setAvatarFailed(true)
+                      }
+                    />
+                  ) : (
+                    <Logo size={38} />
+                  )}
                 </div>
 
                 <div className="profile-details">
@@ -387,6 +616,90 @@ export default function SettingsPage() {
                       ? `@${user.username}`
                       : "Your Fades account"}
                   </span>
+                </div>
+              </div>
+
+              <div className="setting-divider" />
+
+              <div
+                className={`setting-row avatar-row ${
+                  avatarDragging ? "dragging" : ""
+                }`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setAvatarDragging(true);
+                }}
+                onDragLeave={() =>
+                  setAvatarDragging(false)
+                }
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setAvatarDragging(false);
+
+                  uploadAvatar(
+                    event.dataTransfer.files?.[0]
+                  );
+                }}
+              >
+                <div>
+                  <span className="setting-label">
+                    Profile picture
+                  </span>
+
+                  <span className="setting-description">
+                    PNG, JPEG or WebP. Choose a file or
+                    drop one here. It's cropped to a
+                    square.
+                  </span>
+
+                  {avatarError && (
+                    <span
+                      className="avatar-error"
+                      role="alert"
+                    >
+                      {avatarError}
+                    </span>
+                  )}
+                </div>
+
+                <div className="avatar-actions">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    hidden
+                    onChange={(event) =>
+                      uploadAvatar(
+                        event.target.files?.[0]
+                      )
+                    }
+                  />
+
+                  <button
+                    className="avatar-button"
+                    type="button"
+                    disabled={avatarBusy}
+                    onClick={() =>
+                      fileInputRef.current?.click()
+                    }
+                  >
+                    {avatarBusy
+                      ? "Working..."
+                      : avatarSrc
+                        ? "Change photo"
+                        : "Upload photo"}
+                  </button>
+
+                  {avatarSrc && (
+                    <button
+                      className="avatar-button avatar-button-remove"
+                      type="button"
+                      disabled={avatarBusy}
+                      onClick={removeAvatar}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
 
