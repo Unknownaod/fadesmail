@@ -1760,6 +1760,25 @@ textarea:focus-visible {
 }
 
 
+.sender-avatar {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: contain;
+  padding: 3px;
+  background: #fff; /* keeps dark logos visible on the dark theme */
+  border: 1px solid var(--line);
+}
+
+.sender-avatar-fallback {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--text-soft);
+  background: var(--overlay-strong);
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* ==========================================================================
    === EMPTY/LOADING ===   MessageList.js empty state; .spinner is used by AuthLoading.js
    ========================================================================== */
