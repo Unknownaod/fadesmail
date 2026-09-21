@@ -1,5 +1,5 @@
 import Icon from "./Icon";
-import Logo from "./Logo";
+import SenderAvatar from "./SenderAvatar";
 import { formatDate, formatFileSize, getSenderName } from "../lib/format";
 import { normalizeRecipient } from "../lib/recipients";
 import { buildForward, buildReply, buildReplyAll } from "../lib/reply";
@@ -114,7 +114,8 @@ export default function MessageView({
           </div>
 
           <div className="message-meta">
-            <Logo size={28} />
+            {/* Verified BIMI logo / Gravatar -> company favicon -> initial */}
+            <SenderAvatar message={message} size={36} />
 
             <div className="sender-details">
               <strong>{getSenderName(message.sender, message.senderName)}</strong>
