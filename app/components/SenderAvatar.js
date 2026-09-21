@@ -1,12 +1,29 @@
-import { useState } from "react";
-import { getAvatarUrl } from "../lib/avatar";
+import { useMemo, useState } from "react";
+import { getAvatarCandidates } from "../lib/avatar";
 import { getInitial, getSenderName } from "../lib/format";
 
 export default function SenderAvatar({ message, size = 28 }) {
-  const url = getAvatarUrl(message);
-  const [failed, setFailed] = useState(false);
+  const candidates = useMemo(
+    () => getAvatarCandidates(message),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      message.sender,
+      message.sender_avatar,
+      message.senderAvatar,
+      message.avatarUrl,
+      message.avatar_url,
+    ]
+  );
 
-  if (url && !failed) {
+  // Tracks how many candidates have failed for the *current* candidate set,
+  // so a different message reusing this component starts fresh.
+  const key = candidates.join("|");
+  const [failure, setFailure] = useState({ key, count: 0 });
+  const failedCount = failure.key === key ? failure.count : 0;
+
+  const url = candidates[failedCount];
+
+  if (url) {
     return (
       <img
         className="sender-avatar"
@@ -14,7 +31,7 @@ export default function SenderAvatar({ message, size = 28 }) {
         alt=""
         loading="lazy"
         referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
+        onError={() => setFailure({ key, count: failedCount + 1 })}
         style={{ width: size, height: size }}
       />
     );
