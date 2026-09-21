@@ -1,6 +1,8 @@
 import Icon from "./Icon";
 import SenderAvatar from "./SenderAvatar";
+import VerifiedBadge from "./VerifiedBadge";
 import { formatDate, formatFileSize, getSenderName } from "../lib/format";
+import { getSenderDomain } from "../lib/avatar";
 import { normalizeRecipient } from "../lib/recipients";
 import { buildForward, buildReply, buildReplyAll } from "../lib/reply";
 
@@ -25,6 +27,10 @@ export default function MessageView({
   const attachments = Array.isArray(message.attachments)
     ? message.attachments
     : [];
+
+  // Set by the API when the sender's logo came from a verified BIMI record.
+  const isBimiVerified =
+    (message.senderAvatarSource || message.sender_avatar_source) === "bimi";
 
   return (
     <article className="message-view">
@@ -118,7 +124,13 @@ export default function MessageView({
             <SenderAvatar message={message} size={36} />
 
             <div className="sender-details">
-              <strong>{getSenderName(message.sender, message.senderName)}</strong>
+              <strong>
+                {getSenderName(message.sender, message.senderName)}
+
+                {isBimiVerified && (
+                  <VerifiedBadge domain={getSenderDomain(message.sender)} />
+                )}
+              </strong>
 
               <span>{message.sender}</span>
 
