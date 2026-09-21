@@ -1,5 +1,7 @@
 import Icon from "./Icon";
-import Logo from "./Logo";
+import SenderAvatar from "./SenderAvatar";
+import VerifiedBadge from "./VerifiedBadge";
+import { getSenderDomain, isBimiVerified } from "../lib/avatar";
 import { formatDate, getPreview, getSenderName } from "../lib/format";
 
 // One row in the message list.
@@ -55,11 +57,21 @@ export default function MessageRow({
         />
       </div>
 
-      <Logo size={24} />
+      {/* BIMI logo / Gravatar -> company favicon -> initial */}
+      <SenderAvatar message={message} size={32} />
 
       <div className="row-main">
         <div className="row-top">
-          <strong>{sender}</strong>
+          <strong>
+            {sender}
+
+            {isBimiVerified(message) && (
+              <VerifiedBadge
+                compact
+                domain={getSenderDomain(message.sender)}
+              />
+            )}
+          </strong>
 
           <span className="row-date">{formatDate(receivedAt)}</span>
         </div>
