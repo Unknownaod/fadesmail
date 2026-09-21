@@ -38,3 +38,10 @@ export function getAvatarCandidates(message) {
 export function getAvatarUrl(message) {
   return getAvatarCandidates(message)[0] || "";
 }
+
+// True when the API resolved this sender's logo from a verified BIMI record.
+export function isBimiVerified(message) {
+  return (
+    (message.senderAvatarSource || message.sender_avatar_source) === "bimi"
+  );
+}
