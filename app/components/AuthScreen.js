@@ -13,109 +13,6 @@ const INVITE_API_URL =
   "https://invite-api.fades.lol";
 
 // ============================================================
-// RATE LIMITS
-// ============================================================
-//
-// These values mirror the limits configured on the API.
-//
-// IMPORTANT:
-// If you change the backend limits, update these display
-// values too.
-//
-// ============================================================
-
-const RATE_LIMITS = {
-  login: {
-    amount: 5,
-    window: "15 minutes",
-    label: "Admin login",
-  },
-
-  validate: {
-    amount: 60,
-    window: "1 minute",
-    label: "Invitation verification",
-  },
-
-  redeem: {
-    amount: 10,
-    window: "10 minutes",
-    label: "Invitation redemption",
-  },
-
-  admin: {
-    amount: 120,
-    window: "1 minute",
-    label: "Admin API",
-  },
-
-  global: {
-    amount: 300,
-    window: "1 minute",
-    label: "Total API requests",
-  },
-};
-
-// ============================================================
-// TOAST
-// ============================================================
-
-function Toast({
-  toast,
-  onClose,
-}) {
-  if (!toast) {
-    return null;
-  }
-
-  return (
-    <div
-      className={`fades-toast fades-toast-${toast.type || "error"}`}
-      role="alert"
-      aria-live="assertive"
-    >
-      <div className="fades-toast-icon">
-        {toast.type === "success"
-          ? "✓"
-          : toast.type === "warning"
-          ? "!"
-          : "×"}
-      </div>
-
-      <div className="fades-toast-content">
-        {toast.title && (
-          <strong>
-            {toast.title}
-          </strong>
-        )}
-
-        <span>
-          {toast.message}
-        </span>
-
-        {toast.retryAfter ? (
-          <small>
-            Try again in{" "}
-            <strong>
-              {toast.retryAfter}s
-            </strong>
-          </small>
-        ) : null}
-      </div>
-
-      <button
-        type="button"
-        className="fades-toast-close"
-        onClick={onClose}
-        aria-label="Close notification"
-      >
-        ×
-      </button>
-    </div>
-  );
-}
-
-// ============================================================
 // DOODLE BACKGROUND
 // ============================================================
 
@@ -214,27 +111,20 @@ function DoodleBackground() {
     >
       <div className="invite-doodles-grid" />
 
-      {doodles.map(
-        (
-          item,
-          index
-        ) => (
-          <span
-            key={index}
-            className="invite-doodle"
-            style={{
-              left: item.x,
-              top: item.y,
-              "--rotation":
-                item.r,
-              "--delay":
-                item.d,
-            }}
-          >
-            {item.icon}
-          </span>
-        )
-      )}
+      {doodles.map((item, index) => (
+        <span
+          key={index}
+          className="invite-doodle"
+          style={{
+            left: item.x,
+            top: item.y,
+            "--rotation": item.r,
+            "--delay": item.d,
+          }}
+        >
+          {item.icon}
+        </span>
+      ))}
     </div>
   );
 }
@@ -243,12 +133,8 @@ function DoodleBackground() {
 // INVITE ICON
 // ============================================================
 
-function InviteIcon({
-  state,
-}) {
-  if (
-    state === "checking"
-  ) {
+function InviteIcon({ state }) {
+  if (state === "checking") {
     return (
       <div className="invite-icon invite-icon-checking">
         <div className="invite-spinner" />
@@ -258,9 +144,7 @@ function InviteIcon({
     );
   }
 
-  if (
-    state === "valid"
-  ) {
+  if (state === "valid") {
     return (
       <div className="invite-icon invite-icon-success">
         <svg
@@ -317,74 +201,10 @@ function InviteIcon({
 }
 
 // ============================================================
-// RATE LIMIT DISPLAY
-// ============================================================
-
-function RateLimitInfo() {
-  return (
-    <div className="invite-rate-limit">
-      <div className="invite-rate-limit-header">
-        <div className="invite-rate-limit-shield">
-          ↯
-        </div>
-
-        <div>
-          <strong>
-            Protected by rate limits
-          </strong>
-
-          <span>
-            Invitation endpoints are protected
-            against automated abuse.
-          </span>
-        </div>
-      </div>
-
-      <div className="invite-rate-limit-list">
-        <div className="invite-rate-limit-row">
-          <span>
-            Verification
-          </span>
-
-          <strong>
-            {RATE_LIMITS.validate.amount} /{" "}
-            {RATE_LIMITS.validate.window}
-          </strong>
-        </div>
-
-        <div className="invite-rate-limit-row">
-          <span>
-            Redemption
-          </span>
-
-          <strong>
-            {RATE_LIMITS.redeem.amount} /{" "}
-            {RATE_LIMITS.redeem.window}
-          </strong>
-        </div>
-
-        <div className="invite-rate-limit-row">
-          <span>
-            Global API
-          </span>
-
-          <strong>
-            {RATE_LIMITS.global.amount} /{" "}
-            {RATE_LIMITS.global.window}
-          </strong>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
 // AUTH SCREEN
 // ============================================================
 
-export default function AuthScreen({
-  auth,
-}) {
+export default function AuthScreen({ auth }) {
   const {
     authMode,
     username,
@@ -401,213 +221,6 @@ export default function AuthScreen({
 
   const isSignIn =
     authMode === "signin";
-
-  // ==========================================================
-  // TOAST STATE
-  // ==========================================================
-
-  const [
-    toast,
-    setToast,
-  ] = useState(null);
-
-  const toastTimerRef =
-    useRef(null);
-
-  const showToast =
-    useCallback(
-      ({
-        title,
-        message,
-        type = "error",
-        retryAfter = null,
-        duration = 6500,
-      }) => {
-        if (
-          toastTimerRef.current
-        ) {
-          clearTimeout(
-            toastTimerRef.current
-          );
-        }
-
-        setToast({
-          title,
-          message,
-          type,
-          retryAfter,
-        });
-
-        if (duration > 0) {
-          toastTimerRef.current =
-            setTimeout(() => {
-              setToast(null);
-            }, duration);
-        }
-      },
-      []
-    );
-
-  const closeToast =
-    useCallback(() => {
-      if (
-        toastTimerRef.current
-      ) {
-        clearTimeout(
-          toastTimerRef.current
-        );
-      }
-
-      setToast(null);
-    }, []);
-
-  useEffect(() => {
-    return () => {
-      if (
-        toastTimerRef.current
-      ) {
-        clearTimeout(
-          toastTimerRef.current
-        );
-      }
-    };
-  }, []);
-
-  // ==========================================================
-  // RATE LIMIT COOLDOWN
-  // ==========================================================
-
-  const [
-    rateLimitCooldown,
-    setRateLimitCooldown,
-  ] = useState(0);
-
-  const cooldownTimerRef =
-    useRef(null);
-
-  useEffect(() => {
-    if (
-      rateLimitCooldown <= 0
-    ) {
-      if (
-        cooldownTimerRef.current
-      ) {
-        clearInterval(
-          cooldownTimerRef.current
-        );
-
-        cooldownTimerRef.current =
-          null;
-      }
-
-      return;
-    }
-
-    cooldownTimerRef.current =
-      setInterval(() => {
-        setRateLimitCooldown(
-          (current) =>
-            Math.max(
-              0,
-              current - 1
-            )
-        );
-      }, 1000);
-
-    return () => {
-      if (
-        cooldownTimerRef.current
-      ) {
-        clearInterval(
-          cooldownTimerRef.current
-        );
-
-        cooldownTimerRef.current =
-          null;
-      }
-    };
-  }, [
-    rateLimitCooldown > 0,
-  ]);
-
-  function getRetryAfter(
-    response,
-    data
-  ) {
-    const headerValue =
-      response.headers.get(
-        "Retry-After"
-      );
-
-    const bodyValue =
-      data?.retryAfter;
-
-    const value =
-      Number(
-        headerValue ??
-          bodyValue ??
-          0
-      );
-
-    if (
-      !Number.isFinite(value) ||
-      value <= 0
-    ) {
-      return 60;
-    }
-
-    return Math.ceil(
-      value
-    );
-  }
-
-  function handleRateLimited(
-    response,
-    data,
-    action
-  ) {
-    const retryAfter =
-      getRetryAfter(
-        response,
-        data
-      );
-
-    setRateLimitCooldown(
-      retryAfter
-    );
-
-    let message =
-      "Too many requests were sent from this connection.";
-
-    if (
-      action ===
-      "validate"
-    ) {
-      message =
-        `You've made too many invitation verification requests. Please wait ${retryAfter} seconds before trying again.`;
-    }
-
-    if (
-      action ===
-      "redeem"
-    ) {
-      message =
-        `You've made too many invitation redemption requests. Please wait ${retryAfter} seconds before trying again.`;
-    }
-
-    showToast({
-      title:
-        "Slow down",
-      message,
-      type:
-        "warning",
-      retryAfter,
-      duration:
-        8000,
-    });
-
-    return message;
-  }
 
   // ==========================================================
   // INVITE STATE
@@ -646,8 +259,17 @@ export default function AuthScreen({
   // REDEMPTION STATE
   // ==========================================================
 
+  /*
+   * This prevents multiple redemption requests from
+   * accidentally being sent from this component.
+   */
+
   const inviteRedeemedRef =
     useRef(false);
+
+  /*
+   * Tracks whether a signup attempt was actually started.
+   */
 
   const signupAttemptRef =
     useRef(false);
@@ -656,81 +278,79 @@ export default function AuthScreen({
   // NORMALIZE INVITE DATA
   // ==========================================================
 
-  const normalizeInviteInfo =
-    useCallback(
-      (invite) => {
-        if (!invite) {
-          return null;
-        }
+  function normalizeInviteInfo(
+    invite
+  ) {
+    if (!invite) {
+      return null;
+    }
 
-        const maxUses =
-          Number(
-            invite.maxUses ??
-              invite.max_uses ??
-              1
-          );
+    const maxUses =
+      Number(
+        invite.maxUses ??
+          invite.max_uses ??
+          1
+      );
 
-        const useCount =
-          Number(
-            invite.useCount ??
-              invite.use_count ??
-              0
-          );
+    const useCount =
+      Number(
+        invite.useCount ??
+          invite.use_count ??
+          0
+      );
 
-        const explicitRemaining =
-          invite.remainingUses ??
-          invite.remaining_uses;
+    const explicitRemaining =
+      invite.remainingUses ??
+      invite.remaining_uses;
 
-        const remainingUses =
-          explicitRemaining !==
-          undefined
-            ? Number(
-                explicitRemaining
-              )
-            : Math.max(
-                0,
-                maxUses -
-                  useCount
-              );
-
-        return {
-          code:
-            invite.code ||
-            inviteCode,
-
-          maxUses:
-            Number.isFinite(
-              maxUses
-            )
-              ? maxUses
-              : 1,
-
-          useCount:
-            Number.isFinite(
+    const remainingUses =
+      explicitRemaining !==
+      undefined
+        ? Number(
+            explicitRemaining
+          )
+        : Math.max(
+            0,
+            maxUses -
               useCount
-            )
-              ? useCount
-              : 0,
+          );
 
-          remainingUses:
-            Number.isFinite(
-              remainingUses
-            )
-              ? remainingUses
-              : Math.max(
-                  0,
-                  maxUses -
-                    useCount
-                ),
+    return {
+      code:
+        invite.code ||
+        inviteCode,
 
-          expiresAt:
-            invite.expiresAt ??
-            invite.expires_at ??
-            null,
-        };
-      },
-      [inviteCode]
-    );
+      maxUses:
+        Number.isFinite(
+          maxUses
+        )
+          ? maxUses
+          : 1,
+
+      useCount:
+        Number.isFinite(
+          useCount
+        )
+          ? useCount
+          : 0,
+
+      remainingUses:
+        Number.isFinite(
+          remainingUses
+        )
+          ? remainingUses
+          : Math.max(
+              0,
+              maxUses -
+                useCount
+            ),
+
+      expiresAt:
+        invite.expiresAt ??
+        invite.expires_at ??
+        null,
+    };
+  }
 
   // ==========================================================
   // INVITE VALIDATION
@@ -739,13 +359,6 @@ export default function AuthScreen({
   const validateInviteCode =
     useCallback(
       async (code) => {
-        if (
-          inviteChecking ||
-          rateLimitCooldown > 0
-        ) {
-          return false;
-        }
-
         const cleanedCode =
           String(code || "")
             .trim()
@@ -756,9 +369,7 @@ export default function AuthScreen({
             "invalid"
           );
 
-          setInviteInfo(
-            null
-          );
+          setInviteInfo(null);
 
           setInviteError(
             "Please enter your invitation code."
@@ -767,33 +378,8 @@ export default function AuthScreen({
           return false;
         }
 
-        if (
-          cleanedCode.length >
-          64
-        ) {
-          setInviteState(
-            "invalid"
-          );
-
-          setInviteInfo(
-            null
-          );
-
-          setInviteError(
-            "That invitation code is too long."
-          );
-
-          return false;
-        }
-
-        setInviteChecking(
-          true
-        );
-
-        setInviteState(
-          "checking"
-        );
-
+        setInviteChecking(true);
+        setInviteState("checking");
         setInviteError("");
 
         try {
@@ -803,19 +389,13 @@ export default function AuthScreen({
                 cleanedCode
               )}`,
               {
-                method:
-                  "GET",
-
+                method: "GET",
                 headers: {
                   Accept:
                     "application/json",
                 },
-
-                credentials:
-                  "omit",
-
-                cache:
-                  "no-store",
+                credentials: "omit",
+                cache: "no-store",
               }
             );
 
@@ -826,43 +406,7 @@ export default function AuthScreen({
                 () => null
               );
 
-          // ==================================================
-          // RATE LIMITED
-          // ==================================================
-
-          if (
-            response.status ===
-            429
-          ) {
-            const message =
-              handleRateLimited(
-                response,
-                data,
-                "validate"
-              );
-
-            setInviteState(
-              "invalid"
-            );
-
-            setInviteInfo(
-              null
-            );
-
-            setInviteError(
-              message
-            );
-
-            return false;
-          }
-
-          // ==================================================
-          // OTHER API ERROR
-          // ==================================================
-
-          if (
-            !response.ok
-          ) {
+          if (!response.ok) {
             console.error(
               "Invite API error:",
               response.status,
@@ -873,9 +417,7 @@ export default function AuthScreen({
               "invalid"
             );
 
-            setInviteInfo(
-              null
-            );
+            setInviteInfo(null);
 
             if (
               response.status ===
@@ -904,35 +446,24 @@ export default function AuthScreen({
             return false;
           }
 
-          // ==================================================
-          // INVALID INVITE
-          // ==================================================
-
-          if (
-            !data?.valid
-          ) {
+          if (!data?.valid) {
             setInviteState(
               "invalid"
             );
 
-            setInviteInfo(
-              null
-            );
-
-            const message =
-              data?.message ||
-              "This invitation is invalid, expired, revoked, or has no remaining uses.";
+            setInviteInfo(null);
 
             setInviteError(
-              message
+              data?.message ||
+                "This invitation is invalid, expired, revoked, or has no remaining uses."
             );
 
             return false;
           }
 
-          // ==================================================
-          // VALID INVITE
-          // ==================================================
+          // ----------------------------------------------------
+          // VALID
+          // ----------------------------------------------------
 
           const normalizedInvite =
             normalizeInviteInfo(
@@ -953,6 +484,10 @@ export default function AuthScreen({
 
           setInviteError("");
 
+          /*
+           * Keep the invitation in the URL.
+           */
+
           const url =
             new URL(
               window.location.href
@@ -969,17 +504,6 @@ export default function AuthScreen({
             url.toString()
           );
 
-          showToast({
-            title:
-              "Invitation verified",
-            message:
-              "Your invitation is valid. You can now create your Fades Mail mailbox.",
-            type:
-              "success",
-            duration:
-              4500,
-          });
-
           return true;
         } catch (error) {
           console.error(
@@ -991,26 +515,11 @@ export default function AuthScreen({
             "invalid"
           );
 
-          setInviteInfo(
-            null
-          );
-
-          const message =
-            "Unable to connect to the invitation server. Please try again.";
+          setInviteInfo(null);
 
           setInviteError(
-            message
+            "Unable to connect to the invitation server. Please try again."
           );
-
-          showToast({
-            title:
-              "Connection problem",
-            message,
-            type:
-              "error",
-            duration:
-              6500,
-          });
 
           return false;
         } finally {
@@ -1019,12 +528,7 @@ export default function AuthScreen({
           );
         }
       },
-      [
-        inviteChecking,
-        rateLimitCooldown,
-        normalizeInviteInfo,
-        showToast,
-      ]
+      [inviteCode]
     );
 
   // ==========================================================
@@ -1047,24 +551,17 @@ export default function AuthScreen({
           };
         }
 
-        if (
-          rateLimitCooldown > 0
-        ) {
-          return {
-            success: false,
-            rateLimited: true,
-            error:
-              `Please wait ${rateLimitCooldown} seconds before trying again.`,
-          };
-        }
+        /*
+         * Never redeem the same invite twice from
+         * this mounted signup screen.
+         */
 
         if (
           inviteRedeemedRef.current
         ) {
           return {
             success: true,
-            alreadyRedeemed:
-              true,
+            alreadyRedeemed: true,
           };
         }
 
@@ -1073,28 +570,21 @@ export default function AuthScreen({
             await fetch(
               `${INVITE_API_URL}/api/admin?action=redeem`,
               {
-                method:
-                  "POST",
-
+                method: "POST",
                 headers: {
                   "Content-Type":
                     "application/json",
-
                   Accept:
                     "application/json",
                 },
-
-                credentials:
-                  "omit",
-
-                cache:
-                  "no-store",
-
-                body:
-                  JSON.stringify({
+                credentials: "omit",
+                cache: "no-store",
+                body: JSON.stringify(
+                  {
                     code:
                       cleanedCode,
-                  }),
+                  }
+                ),
               }
             );
 
@@ -1104,31 +594,6 @@ export default function AuthScreen({
               .catch(
                 () => null
               );
-
-          // ==================================================
-          // RATE LIMITED
-          // ==================================================
-
-          if (
-            response.status ===
-            429
-          ) {
-            const message =
-              handleRateLimited(
-                response,
-                data,
-                "redeem"
-              );
-
-            return {
-              success:
-                false,
-              rateLimited:
-                true,
-              error:
-                message,
-            };
-          }
 
           if (
             !response.ok ||
@@ -1140,29 +605,19 @@ export default function AuthScreen({
               data
             );
 
-            const errorMessage =
-              data?.error ||
-              data?.message ||
-              "The invitation could not be redeemed.";
-
-            showToast({
-              title:
-                "Invitation not redeemed",
-              message:
-                errorMessage,
-              type:
-                "error",
-              duration:
-                7000,
-            });
-
             return {
-              success:
-                false,
+              success: false,
               error:
-                errorMessage,
+                data?.error ||
+                data?.message ||
+                "The invitation could not be redeemed.",
             };
           }
+
+          /*
+           * Mark locally as redeemed only after
+           * the API confirms the redemption.
+           */
 
           inviteRedeemedRef.current =
             true;
@@ -1172,29 +627,14 @@ export default function AuthScreen({
               data.invite
             );
 
-          if (
-            updatedInvite
-          ) {
+          if (updatedInvite) {
             setInviteInfo(
               updatedInvite
             );
           }
 
-          showToast({
-            title:
-              "Invitation redeemed",
-            message:
-              "Your invitation has been successfully used for this mailbox.",
-            type:
-              "success",
-            duration:
-              5000,
-          });
-
           return {
-            success:
-              true,
-
+            success: true,
             invite:
               data.invite ||
               null,
@@ -1205,33 +645,14 @@ export default function AuthScreen({
             error
           );
 
-          const errorMessage =
-            "We couldn't connect to the invitation server to complete your invitation.";
-
-          showToast({
-            title:
-              "Connection problem",
-            message:
-              errorMessage,
-            type:
-              "error",
-            duration:
-              7000,
-          });
-
           return {
-            success:
-              false,
+            success: false,
             error:
-              errorMessage,
+              "We couldn't connect to the invitation server to complete your invitation.",
           };
         }
       },
-      [
-        rateLimitCooldown,
-        normalizeInviteInfo,
-        showToast,
-      ]
+      [normalizeInviteInfo]
     );
 
   // ==========================================================
@@ -1246,9 +667,7 @@ export default function AuthScreen({
 
       setInviteError("");
 
-      setInviteInfo(
-        null
-      );
+      setInviteInfo(null);
 
       setInviteChecking(
         false
@@ -1266,9 +685,7 @@ export default function AuthScreen({
       );
 
     const codeFromUrl =
-      params.get(
-        "invite"
-      );
+      params.get("invite");
 
     if (codeFromUrl) {
       const cleanedCode =
@@ -1290,12 +707,11 @@ export default function AuthScreen({
 
       setInviteError("");
 
-      setInviteInfo(
-        null
-      );
+      setInviteInfo(null);
     }
   }, [
     isSignIn,
+    validateInviteCode,
   ]);
 
   // ==========================================================
@@ -1309,17 +725,13 @@ export default function AuthScreen({
       event.target.value
         .toUpperCase();
 
-    setInviteCode(
-      value
-    );
+    setInviteCode(value);
 
     setInviteState(
       "invalid"
     );
 
-    setInviteInfo(
-      null
-    );
+    setInviteInfo(null);
 
     setInviteError("");
 
@@ -1348,10 +760,7 @@ export default function AuthScreen({
   ) {
     event.preventDefault();
 
-    if (
-      inviteChecking ||
-      rateLimitCooldown > 0
-    ) {
+    if (inviteChecking) {
       return;
     }
 
@@ -1373,9 +782,7 @@ export default function AuthScreen({
 
     setInviteCode("");
 
-    setInviteInfo(
-      null
-    );
+    setInviteInfo(null);
 
     inviteRedeemedRef.current =
       false;
@@ -1414,9 +821,12 @@ export default function AuthScreen({
   async function handleSignupSubmit(
     event
   ) {
+    /*
+     * Never allow signup without a verified invite.
+     */
+
     if (
-      inviteState !==
-      "valid"
+      inviteState !== "valid"
     ) {
       event.preventDefault();
 
@@ -1424,24 +834,15 @@ export default function AuthScreen({
         "Please verify your invitation first."
       );
 
-      showToast({
-        title:
-          "Invitation required",
-        message:
-          "Verify your invitation code before creating your mailbox.",
-        type:
-          "warning",
-        duration:
-          5000,
-      });
-
       return;
     }
 
+    /*
+     * Make absolutely sure we have an invite code.
+     */
+
     const cleanedCode =
-      String(
-        inviteCode || ""
-      )
+      String(inviteCode || "")
         .trim()
         .toUpperCase();
 
@@ -1455,29 +856,19 @@ export default function AuthScreen({
       return;
     }
 
-    if (
-      rateLimitCooldown > 0
-    ) {
-      event.preventDefault();
-
-      showToast({
-        title:
-          "Please wait",
-        message:
-          "The invitation service is temporarily rate-limiting requests.",
-        type:
-          "warning",
-        retryAfter:
-          rateLimitCooldown,
-        duration:
-          7000,
-      });
-
-      return;
-    }
+    /*
+     * Keep the invite code available to the existing
+     * authentication implementation.
+     */
 
     auth.inviteCode =
       cleanedCode;
+
+    /*
+     * Tell the auth system which invitation is being
+     * used. This is useful if your submitAuth implementation
+     * already supports inviteCode.
+     */
 
     if (
       typeof auth.setInviteCode ===
@@ -1492,15 +883,26 @@ export default function AuthScreen({
       true;
 
     try {
+      /*
+       * IMPORTANT:
+       *
+       * submitAuth should return after the account creation
+       * request has completed.
+       *
+       * The invite is redeemed only AFTER submitAuth succeeds.
+       */
+
       const result =
-        await submitAuth(
-          event
-        );
+        await submitAuth(event);
+
+      /*
+       * If submitAuth explicitly tells us that signup failed,
+       * do NOT consume the invite.
+       */
 
       if (
         result === false ||
-        result?.success ===
-          false ||
+        result?.success === false ||
         result?.ok === false
       ) {
         signupAttemptRef.current =
@@ -1508,6 +910,12 @@ export default function AuthScreen({
 
         return;
       }
+
+      /*
+       * Give the authentication request a moment to finish
+       * updating its own state if it returns without a
+       * structured result.
+       */
 
       await new Promise(
         (resolve) =>
@@ -1517,12 +925,23 @@ export default function AuthScreen({
           )
       );
 
+      /*
+       * If an auth error has already been reported, do not
+       * consume the invitation.
+       */
+
       if (authError) {
         signupAttemptRef.current =
           false;
 
         return;
       }
+
+      /*
+       * REDEEM THE INVITE.
+       *
+       * This is the piece that was missing from the old file.
+       */
 
       const redemption =
         await redeemInvite(
@@ -1536,6 +955,15 @@ export default function AuthScreen({
           "Account creation completed, but invite redemption failed:",
           redemption.error
         );
+
+        /*
+         * We intentionally do not pretend the invite was
+         * redeemed if the API rejected it.
+         *
+         * The account has already been created at this point,
+         * so this should also be logged server-side in a
+         * production system.
+         */
 
         return;
       }
@@ -1561,24 +989,9 @@ export default function AuthScreen({
 
   return (
     <main className="auth-page">
+      {/* Same background for BOTH sign-in and signup */}
+
       <DoodleBackground />
-
-      {/* ================================================== */}
-      {/* TOAST LAYER */}
-      {/* ================================================== */}
-
-      <div
-        className="fades-toast-layer"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <Toast
-          toast={toast}
-          onClose={
-            closeToast
-          }
-        />
-      </div>
 
       <div className="auth-shell">
         {/* ================================================== */}
@@ -1643,6 +1056,8 @@ export default function AuthScreen({
                   submitAuth
                 }
               >
+                {/* EMAIL */}
+
                 <label>
                   <span>
                     Email
@@ -1650,12 +1065,15 @@ export default function AuthScreen({
 
                   <input
                     type="email"
-                    value={email}
+                    value={
+                      email
+                    }
                     onChange={(
                       event
                     ) =>
                       setEmail(
-                        event.target
+                        event
+                          .target
                           .value
                       )
                     }
@@ -1666,6 +1084,8 @@ export default function AuthScreen({
                   />
                 </label>
 
+                {/* PASSWORD */}
+
                 <label>
                   <span>
                     Password
@@ -1673,12 +1093,15 @@ export default function AuthScreen({
 
                   <input
                     type="password"
-                    value={password}
+                    value={
+                      password
+                    }
                     onChange={(
                       event
                     ) =>
                       setPassword(
-                        event.target
+                        event
+                          .target
                           .value
                       )
                     }
@@ -1688,6 +1111,8 @@ export default function AuthScreen({
                   />
                 </label>
 
+                {/* ERROR */}
+
                 {authError && (
                   <div className="auth-error">
                     <span>
@@ -1695,10 +1120,14 @@ export default function AuthScreen({
                     </span>
 
                     <span>
-                      {authError}
+                      {
+                        authError
+                      }
                     </span>
                   </div>
                 )}
+
+                {/* SUBMIT */}
 
                 <button
                   className="auth-submit"
@@ -1756,6 +1185,8 @@ export default function AuthScreen({
                     </p>
                   </div>
 
+                  {/* INVITE FORM */}
+
                   <form
                     className="invite-entry"
                     onSubmit={
@@ -1782,12 +1213,10 @@ export default function AuthScreen({
                           false
                         }
                         maxLength={
-                          64
+                          22
                         }
                         disabled={
-                          inviteChecking ||
-                          rateLimitCooldown >
-                            0
+                          inviteChecking
                         }
                         required
                       />
@@ -1813,58 +1242,25 @@ export default function AuthScreen({
                       </div>
                     )}
 
-                    {rateLimitCooldown >
-                      0 && (
-                      <div className="invite-rate-limit-warning">
-                        <div className="invite-rate-limit-warning-icon">
-                          ⏱
-                        </div>
-
-                        <div>
-                          <strong>
-                            Verification temporarily limited
-                          </strong>
-
-                          <span>
-                            Try again in{" "}
-                            <b>
-                              {
-                                rateLimitCooldown
-                              }{" "}
-                              seconds
-                            </b>
-                            .
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
                     <button
                       className="auth-submit"
                       type="submit"
                       disabled={
                         inviteChecking ||
-                        !inviteCode.trim() ||
-                        rateLimitCooldown >
-                          0
+                        !inviteCode.trim()
                       }
                     >
                       <span>
                         {inviteChecking
                           ? "Verifying invitation..."
-                          : rateLimitCooldown >
-                            0
-                          ? `Try again in ${rateLimitCooldown}s`
                           : "Verify invitation"}
                       </span>
 
-                      {!inviteChecking &&
-                        rateLimitCooldown <=
-                          0 && (
-                          <span className="submit-arrow">
-                            →
-                          </span>
-                        )}
+                      {!inviteChecking && (
+                        <span className="submit-arrow">
+                          →
+                        </span>
+                      )}
                     </button>
                   </form>
 
@@ -1873,8 +1269,6 @@ export default function AuthScreen({
                       <div className="invite-progress-bar" />
                     </div>
                   )}
-
-                  <RateLimitInfo />
 
                   <div className="invite-private-note">
                     <span className="invite-private-lock">
@@ -1985,6 +1379,8 @@ export default function AuthScreen({
                       handleSignupSubmit
                     }
                   >
+                    {/* USERNAME */}
+
                     <label>
                       <span>
                         Username
@@ -2000,7 +1396,8 @@ export default function AuthScreen({
                             event
                           ) =>
                             setUsername(
-                              event.target
+                              event
+                                .target
                                 .value
                             )
                           }
@@ -2025,6 +1422,8 @@ export default function AuthScreen({
                       </em>
                     </label>
 
+                    {/* EMAIL */}
+
                     <label>
                       <span>
                         Email
@@ -2039,7 +1438,8 @@ export default function AuthScreen({
                           event
                         ) =>
                           setEmail(
-                            event.target
+                            event
+                              .target
                               .value
                           )
                         }
@@ -2048,6 +1448,8 @@ export default function AuthScreen({
                         required
                       />
                     </label>
+
+                    {/* PASSWORD */}
 
                     <label>
                       <span>
@@ -2063,7 +1465,8 @@ export default function AuthScreen({
                           event
                         ) =>
                           setPassword(
-                            event.target
+                            event
+                              .target
                               .value
                           )
                         }
@@ -2073,6 +1476,8 @@ export default function AuthScreen({
                       />
                     </label>
 
+                    {/* AUTH ERROR */}
+
                     {authError && (
                       <div className="auth-error">
                         <span>
@@ -2080,37 +1485,34 @@ export default function AuthScreen({
                         </span>
 
                         <span>
-                          {authError}
+                          {
+                            authError
+                          }
                         </span>
                       </div>
                     )}
+
+                    {/* CREATE MAILBOX */}
 
                     <button
                       className="auth-submit"
                       type="submit"
                       disabled={
                         authSubmitting ||
-                        signupBlocked ||
-                        rateLimitCooldown >
-                          0
+                        signupBlocked
                       }
                     >
                       <span>
                         {authSubmitting
                           ? "Creating mailbox..."
-                          : rateLimitCooldown >
-                            0
-                          ? `Please wait ${rateLimitCooldown}s`
                           : "Create mailbox"}
                       </span>
 
-                      {!authSubmitting &&
-                        rateLimitCooldown <=
-                          0 && (
-                          <span className="submit-arrow">
-                            →
-                          </span>
-                        )}
+                      {!authSubmitting && (
+                        <span className="submit-arrow">
+                          →
+                        </span>
+                      )}
                     </button>
                   </form>
 
@@ -2175,288 +1577,6 @@ export default function AuthScreen({
           </span>
         </div>
       </div>
-
-      {/* ================================================== */}
-      {/* TOAST FALLBACK STYLES */}
-      {/* ================================================== */}
-
-      <style jsx>{`
-        .fades-toast-layer {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          z-index: 999999;
-          width: min(
-            calc(100vw - 40px),
-            430px
-          );
-          pointer-events: none;
-        }
-
-        .fades-toast {
-          width: 100%;
-          min-width: 0;
-          box-sizing: border-box;
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 15px 16px;
-          border-radius: 16px;
-          border: 1px solid
-            rgba(0, 0, 0, 0.09);
-          background: rgba(
-            255,
-            255,
-            255,
-            0.98
-          );
-          color: #171717;
-          box-shadow:
-            0 18px 45px
-              rgba(0, 0, 0, 0.15),
-            0 3px 12px
-              rgba(0, 0, 0, 0.08);
-          backdrop-filter: blur(
-            18px
-          );
-          -webkit-backdrop-filter: blur(
-            18px
-          );
-          animation:
-            fadesToastIn
-            0.22s ease-out;
-          pointer-events: auto;
-          overflow: hidden;
-        }
-
-        .fades-toast-icon {
-          flex: 0 0 30px;
-          width: 30px;
-          height: 30px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          background: #f1f1f1;
-          font-weight: 800;
-          font-size: 16px;
-        }
-
-        .fades-toast-success
-          .fades-toast-icon {
-          background: #e9f8ef;
-          color: #18864b;
-        }
-
-        .fades-toast-warning
-          .fades-toast-icon {
-          background: #fff5dc;
-          color: #a96c00;
-        }
-
-        .fades-toast-error
-          .fades-toast-icon {
-          background: #ffeded;
-          color: #c93636;
-        }
-
-        .fades-toast-content {
-          min-width: 0;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          line-height: 1.4;
-        }
-
-        .fades-toast-content strong {
-          font-size: 14px;
-          line-height: 1.25;
-        }
-
-        .fades-toast-content span {
-          font-size: 13px;
-          line-height: 1.45;
-          overflow-wrap: anywhere;
-          word-break: break-word;
-        }
-
-        .fades-toast-content small {
-          margin-top: 3px;
-          font-size: 12px;
-          opacity: 0.65;
-        }
-
-        .fades-toast-close {
-          flex: 0 0 auto;
-          width: 28px;
-          height: 28px;
-          border: 0;
-          background: transparent;
-          color: inherit;
-          opacity: 0.5;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 21px;
-          line-height: 1;
-        }
-
-        .fades-toast-close:hover {
-          opacity: 1;
-          background: rgba(
-            0,
-            0,
-            0,
-            0.05
-          );
-        }
-
-        .invite-rate-limit {
-          width: 100%;
-          box-sizing: border-box;
-          margin-top: 18px;
-          padding: 14px;
-          border-radius: 14px;
-          background: rgba(
-            0,
-            0,
-            0,
-            0.025
-          );
-          border: 1px solid
-            rgba(0, 0, 0, 0.07);
-        }
-
-        .invite-rate-limit-header {
-          display: flex;
-          gap: 10px;
-          align-items: flex-start;
-        }
-
-        .invite-rate-limit-shield {
-          width: 28px;
-          height: 28px;
-          flex: 0 0 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 9px;
-          background: #f1f1f1;
-          font-size: 14px;
-          font-weight: 800;
-        }
-
-        .invite-rate-limit-header
-          strong {
-          display: block;
-          font-size: 12px;
-          line-height: 1.3;
-        }
-
-        .invite-rate-limit-header
-          span {
-          display: block;
-          margin-top: 2px;
-          font-size: 11px;
-          line-height: 1.4;
-          opacity: 0.6;
-        }
-
-        .invite-rate-limit-list {
-          margin-top: 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-
-        .invite-rate-limit-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          font-size: 11px;
-        }
-
-        .invite-rate-limit-row span {
-          opacity: 0.6;
-        }
-
-        .invite-rate-limit-row strong {
-          font-weight: 650;
-          white-space: nowrap;
-        }
-
-        .invite-rate-limit-warning {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          margin-top: 10px;
-          padding: 12px;
-          border-radius: 12px;
-          background: #fff8e7;
-          border: 1px solid
-            #f0dca8;
-          color: #765100;
-        }
-
-        .invite-rate-limit-warning-icon {
-          flex: 0 0 24px;
-          width: 24px;
-          height: 24px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 7px;
-          background: #f7e8bd;
-          font-size: 12px;
-        }
-
-        .invite-rate-limit-warning
-          strong {
-          display: block;
-          font-size: 12px;
-          line-height: 1.3;
-        }
-
-        .invite-rate-limit-warning
-          span {
-          display: block;
-          margin-top: 2px;
-          font-size: 11px;
-          line-height: 1.45;
-        }
-
-        @keyframes fadesToastIn {
-          from {
-            opacity: 0;
-            transform: translateY(
-              -10px
-            ) scale(0.98);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(
-              0
-            ) scale(1);
-          }
-        }
-
-        @media (max-width: 600px) {
-          .fades-toast-layer {
-            top: 12px;
-            right: 12px;
-            width: calc(
-              100vw - 24px
-            );
-          }
-
-          .fades-toast {
-            padding: 14px;
-            border-radius: 14px;
-          }
-        }
-      `}</style>
     </main>
   );
 }
