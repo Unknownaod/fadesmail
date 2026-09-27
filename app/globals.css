@@ -3189,3 +3189,774 @@ textarea:focus-visible {
     padding: 13px;
   }
 }
+
+/* ============================================================
+   FADES MAIL — INVITE GATE
+   ============================================================ */
+
+.auth-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* ------------------------------------------------------------
+   Telegram-style doodle background
+   ------------------------------------------------------------ */
+
+.invite-doodles {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(255, 255, 255, 0.82),
+      rgba(241, 239, 233, 0.94) 58%,
+      rgba(232, 229, 222, 1)
+    );
+}
+
+.invite-doodles::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(255, 255, 255, 0.75),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(255, 255, 255, 0.55),
+      transparent 28%
+    );
+  animation: inviteAmbient 14s ease-in-out infinite alternate;
+}
+
+.invite-doodles-grid {
+  position: absolute;
+  inset: -100px;
+  opacity: 0.45;
+
+  background-image:
+    linear-gradient(
+      135deg,
+      rgba(80, 88, 96, 0.035) 25%,
+      transparent 25%
+    ),
+    linear-gradient(
+      315deg,
+      rgba(80, 88, 96, 0.035) 25%,
+      transparent 25%
+    );
+
+  background-size: 90px 90px;
+  animation: inviteGridMove 30s linear infinite;
+}
+
+.invite-doodle {
+  position: absolute;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 48px;
+  height: 48px;
+
+  color: rgba(70, 79, 87, 0.095);
+
+  font-size: 28px;
+  font-weight: 500;
+
+  transform: rotate(var(--rotation));
+
+  user-select: none;
+  pointer-events: none;
+
+  animation:
+    inviteDoodleFloat 5s ease-in-out var(--delay)
+      infinite;
+}
+
+@keyframes inviteDoodleFloat {
+  0%,
+  100% {
+    transform:
+      translate3d(0, 0, 0)
+      rotate(var(--rotation));
+  }
+
+  50% {
+    transform:
+      translate3d(0, -9px, 0)
+      rotate(calc(var(--rotation) + 3deg));
+  }
+}
+
+@keyframes inviteGridMove {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(90px, 90px, 0);
+  }
+}
+
+@keyframes inviteAmbient {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: scale(1.08) translate3d(1%, -1%, 0);
+  }
+}
+
+/* ------------------------------------------------------------
+   Card
+   ------------------------------------------------------------ */
+
+.auth-card-invite {
+  position: relative;
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.72);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.94),
+      rgba(249, 248, 245, 0.89)
+    );
+
+  box-shadow:
+    0 32px 80px rgba(30, 35, 40, 0.14),
+    0 8px 25px rgba(30, 35, 40, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+
+  animation: authCardEnter 650ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-card-invite::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+
+  height: 2px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(70, 79, 87, 0.24),
+    transparent
+  );
+
+  opacity: 0.7;
+}
+
+.auth-card-invite::after {
+  content: "";
+
+  position: absolute;
+  width: 240px;
+  height: 240px;
+
+  top: -150px;
+  right: -100px;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.5);
+
+  filter: blur(5px);
+
+  pointer-events: none;
+}
+
+@keyframes authCardEnter {
+  from {
+    opacity: 0;
+    transform:
+      translateY(18px)
+      scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+/* ------------------------------------------------------------
+   Invite gate
+   ------------------------------------------------------------ */
+
+.invite-gate {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding: 12px 4px 8px;
+
+  text-align: center;
+
+  animation: inviteContentEnter 550ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes inviteContentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ------------------------------------------------------------
+   Invite icon
+   ------------------------------------------------------------ */
+
+.invite-icon {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 78px;
+  height: 78px;
+
+  margin-bottom: 24px;
+
+  border-radius: 26px;
+
+  background: rgba(244, 242, 237, 0.95);
+
+  box-shadow:
+    0 12px 30px rgba(30, 35, 40, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  color: #4f5860;
+
+  transition:
+    background 300ms ease,
+    color 300ms ease,
+    transform 300ms ease;
+}
+
+.invite-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.invite-icon > span {
+  position: absolute;
+
+  font-size: 20px;
+
+  opacity: 0.7;
+}
+
+.invite-icon-locked {
+  animation: inviteLockPulse 3s ease-in-out infinite;
+}
+
+@keyframes inviteLockPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 30px rgba(30, 35, 40, 0.08),
+      0 0 0 0 rgba(79, 88, 96, 0);
+  }
+
+  50% {
+    box-shadow:
+      0 16px 36px rgba(30, 35, 40, 0.1),
+      0 0 0 9px rgba(79, 88, 96, 0.035);
+  }
+}
+
+/* ------------------------------------------------------------
+   Checking animation
+   ------------------------------------------------------------ */
+
+.invite-icon-checking {
+  background: #f4f2ed;
+  color: #535d65;
+
+  animation: inviteCheckingPulse 1.5s ease-in-out infinite;
+}
+
+.invite-spinner {
+  position: absolute;
+  inset: -5px;
+
+  border-radius: 29px;
+
+  border: 2px solid transparent;
+
+  border-top-color: rgba(70, 79, 87, 0.5);
+  border-right-color: rgba(70, 79, 87, 0.14);
+
+  animation: inviteSpinner 850ms linear infinite;
+}
+
+@keyframes inviteSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes inviteCheckingPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+/* ------------------------------------------------------------
+   Success
+   ------------------------------------------------------------ */
+
+.invite-icon-success {
+  color: #3f6551;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(222, 239, 228, 0.95),
+      rgba(237, 245, 239, 0.95)
+    );
+
+  animation: inviteSuccessPop 500ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.invite-icon-success svg {
+  animation: inviteCheckDraw 500ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes inviteSuccessPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  70% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes inviteCheckDraw {
+  from {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 30;
+  }
+
+  to {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ------------------------------------------------------------
+   Heading
+   ------------------------------------------------------------ */
+
+.invite-gate-heading {
+  max-width: 410px;
+}
+
+.invite-status {
+  margin-bottom: 9px;
+
+  color: #717981;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.invite-status-locked {
+  color: #777d82;
+}
+
+.invite-gate h1 {
+  margin: 0;
+
+  color: #24282c;
+
+  font-size: 32px;
+  line-height: 1.1;
+
+  letter-spacing: -0.035em;
+}
+
+.invite-gate p {
+  margin: 13px auto 0;
+
+  max-width: 370px;
+
+  color: #737a80;
+
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* ------------------------------------------------------------
+   Verification progress
+   ------------------------------------------------------------ */
+
+.invite-progress {
+  width: min(260px, 80%);
+
+  height: 4px;
+
+  margin-top: 28px;
+
+  overflow: hidden;
+
+  border-radius: 99px;
+
+  background: rgba(72, 80, 87, 0.08);
+}
+
+.invite-progress-bar {
+  width: 35%;
+  height: 100%;
+
+  border-radius: inherit;
+
+  background: rgba(72, 80, 87, 0.42);
+
+  animation: inviteProgress 1.15s ease-in-out infinite;
+}
+
+@keyframes inviteProgress {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(390%);
+  }
+}
+
+/* ------------------------------------------------------------
+   Error
+   ------------------------------------------------------------ */
+
+.invite-error-card {
+  display: flex;
+  align-items: flex-start;
+
+  width: 100%;
+
+  margin-top: 27px;
+  padding: 13px 14px;
+
+  gap: 12px;
+
+  text-align: left;
+
+  border: 1px solid rgba(110, 83, 83, 0.11);
+
+  border-radius: 15px;
+
+  background: rgba(248, 244, 242, 0.9);
+}
+
+.invite-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 auto;
+
+  width: 27px;
+  height: 27px;
+
+  border-radius: 9px;
+
+  color: #725e5e;
+  background: rgba(115, 94, 94, 0.1);
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.invite-error-card strong,
+.invite-error-card span {
+  display: block;
+}
+
+.invite-error-card strong {
+  color: #464044;
+
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.invite-error-card span {
+  margin-top: 3px;
+
+  color: #81797c;
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------
+   Private note
+   ------------------------------------------------------------ */
+
+.invite-private-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  margin-top: 28px;
+
+  color: #8b9094;
+
+  font-size: 11px;
+}
+
+.invite-private-lock {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+/* ------------------------------------------------------------
+   Verified signup
+   ------------------------------------------------------------ */
+
+.signup-content {
+  position: relative;
+  z-index: 1;
+
+  animation: signupReveal 600ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes signupReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.verified-banner {
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  margin-bottom: 24px;
+  padding: 10px 12px;
+
+  border: 1px solid rgba(65, 105, 81, 0.1);
+
+  border-radius: 14px;
+
+  background: rgba(235, 244, 238, 0.72);
+}
+
+.verified-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 29px;
+  height: 29px;
+
+  flex: 0 0 auto;
+
+  border-radius: 9px;
+
+  color: #3f6551;
+
+  background: rgba(63, 101, 81, 0.09);
+}
+
+.verified-banner-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.verified-banner strong,
+.verified-banner span {
+  display: block;
+}
+
+.verified-banner strong {
+  color: #3e5145;
+
+  font-size: 12px;
+}
+
+.verified-banner span {
+  margin-top: 2px;
+
+  color: #7b877e;
+
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------------
+   Auth heading enhancements
+   ------------------------------------------------------------ */
+
+.auth-heading-badge {
+  display: inline-flex;
+  align-items: center;
+
+  min-height: 25px;
+
+  margin-bottom: 12px;
+  padding: 5px 9px;
+
+  border: 1px solid rgba(75, 83, 89, 0.08);
+
+  border-radius: 99px;
+
+  color: #777e84;
+
+  background: rgba(244, 242, 237, 0.75);
+
+  font-size: 9px;
+  font-weight: 750;
+
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------
+   Existing form polish
+   ------------------------------------------------------------ */
+
+.auth-card-invite .auth-form input {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.auth-card-invite .auth-form input:focus {
+  transform: translateY(-1px);
+
+  border-color: rgba(75, 83, 89, 0.25);
+
+  box-shadow:
+    0 0 0 4px rgba(75, 83, 89, 0.055),
+    0 7px 20px rgba(30, 35, 40, 0.05);
+}
+
+.auth-card-invite .auth-submit {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.auth-card-invite .auth-submit:not(:disabled):hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 12px 25px rgba(30, 35, 40, 0.13);
+}
+
+.auth-card-invite .auth-submit:not(:disabled):active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ------------------------------------------------------------
+   Mobile
+   ------------------------------------------------------------ */
+
+@media (max-width: 600px) {
+  .invite-doodle {
+    transform: scale(0.8) rotate(var(--rotation));
+  }
+
+  .auth-card-invite {
+    margin-left: 14px;
+    margin-right: 14px;
+
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .invite-gate h1 {
+    font-size: 28px;
+  }
+
+  .invite-icon {
+    width: 70px;
+    height: 70px;
+  }
+
+  .invite-private-note {
+    padding-bottom: 4px;
+  }
+}
+
+/* ------------------------------------------------------------
+   Reduced motion
+   ------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .invite-doodle,
+  .invite-doodles-grid,
+  .invite-doodles::before,
+  .invite-icon,
+  .invite-spinner,
+  .invite-progress-bar,
+  .auth-card-invite,
+  .invite-gate,
+  .signup-content {
+    animation: none !important;
+  }
+}
