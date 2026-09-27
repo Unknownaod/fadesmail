@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import Logo from "./Logo";
 
-const INVITE_API_URL = "https://invite-api.fades.lol";
+const INVITE_API_URL =
+  "https://invite-api.fades.lol";
 
 // ============================================================
 // DOODLE BACKGROUND
@@ -11,18 +18,90 @@ const INVITE_API_URL = "https://invite-api.fades.lol";
 
 function DoodleBackground() {
   const doodles = [
-    { icon: "✈", x: "8%", y: "12%", r: "-18deg", d: "0s" },
-    { icon: "♡", x: "18%", y: "72%", r: "14deg", d: "1s" },
-    { icon: "✉", x: "31%", y: "20%", r: "-8deg", d: "2s" },
-    { icon: "✦", x: "43%", y: "82%", r: "18deg", d: "1.5s" },
-    { icon: "☁", x: "56%", y: "11%", r: "-12deg", d: "2.5s" },
-    { icon: "@", x: "69%", y: "76%", r: "10deg", d: ".5s" },
-    { icon: "⌁", x: "82%", y: "18%", r: "-16deg", d: "3s" },
-    { icon: "♡", x: "91%", y: "61%", r: "16deg", d: "1.2s" },
-    { icon: "✈", x: "73%", y: "43%", r: "20deg", d: "2.2s" },
-    { icon: "✦", x: "11%", y: "43%", r: "-20deg", d: "1.8s" },
-    { icon: "✉", x: "88%", y: "88%", r: "-7deg", d: "2.7s" },
-    { icon: "@", x: "37%", y: "57%", r: "12deg", d: "3.2s" },
+    {
+      icon: "✈",
+      x: "8%",
+      y: "12%",
+      r: "-18deg",
+      d: "0s",
+    },
+    {
+      icon: "♡",
+      x: "18%",
+      y: "72%",
+      r: "14deg",
+      d: "1s",
+    },
+    {
+      icon: "✉",
+      x: "31%",
+      y: "20%",
+      r: "-8deg",
+      d: "2s",
+    },
+    {
+      icon: "✦",
+      x: "43%",
+      y: "82%",
+      r: "18deg",
+      d: "1.5s",
+    },
+    {
+      icon: "☁",
+      x: "56%",
+      y: "11%",
+      r: "-12deg",
+      d: "2.5s",
+    },
+    {
+      icon: "@",
+      x: "69%",
+      y: "76%",
+      r: "10deg",
+      d: ".5s",
+    },
+    {
+      icon: "⌁",
+      x: "82%",
+      y: "18%",
+      r: "-16deg",
+      d: "3s",
+    },
+    {
+      icon: "♡",
+      x: "91%",
+      y: "61%",
+      r: "16deg",
+      d: "1.2s",
+    },
+    {
+      icon: "✈",
+      x: "73%",
+      y: "43%",
+      r: "20deg",
+      d: "2.2s",
+    },
+    {
+      icon: "✦",
+      x: "11%",
+      y: "43%",
+      r: "-20deg",
+      d: "1.8s",
+    },
+    {
+      icon: "✉",
+      x: "88%",
+      y: "88%",
+      r: "-7deg",
+      d: "2.7s",
+    },
+    {
+      icon: "@",
+      x: "37%",
+      y: "57%",
+      r: "12deg",
+      d: "3.2s",
+    },
   ];
 
   return (
@@ -143,6 +222,10 @@ export default function AuthScreen({ auth }) {
   const isSignIn =
     authMode === "signin";
 
+  // ==========================================================
+  // INVITE STATE
+  // ==========================================================
+
   const [
     inviteState,
     setInviteState,
@@ -167,153 +250,410 @@ export default function AuthScreen({ auth }) {
     setInviteChecking,
   ] = useState(false);
 
+  const [
+    inviteInfo,
+    setInviteInfo,
+  ] = useState(null);
+
+  // ==========================================================
+  // REDEMPTION STATE
+  // ==========================================================
+
+  /*
+   * This prevents multiple redemption requests from
+   * accidentally being sent from this component.
+   */
+
+  const inviteRedeemedRef =
+    useRef(false);
+
+  /*
+   * Tracks whether a signup attempt was actually started.
+   */
+
+  const signupAttemptRef =
+    useRef(false);
+
+  // ==========================================================
+  // NORMALIZE INVITE DATA
+  // ==========================================================
+
+  function normalizeInviteInfo(
+    invite
+  ) {
+    if (!invite) {
+      return null;
+    }
+
+    const maxUses =
+      Number(
+        invite.maxUses ??
+          invite.max_uses ??
+          1
+      );
+
+    const useCount =
+      Number(
+        invite.useCount ??
+          invite.use_count ??
+          0
+      );
+
+    const explicitRemaining =
+      invite.remainingUses ??
+      invite.remaining_uses;
+
+    const remainingUses =
+      explicitRemaining !==
+      undefined
+        ? Number(
+            explicitRemaining
+          )
+        : Math.max(
+            0,
+            maxUses -
+              useCount
+          );
+
+    return {
+      code:
+        invite.code ||
+        inviteCode,
+
+      maxUses:
+        Number.isFinite(
+          maxUses
+        )
+          ? maxUses
+          : 1,
+
+      useCount:
+        Number.isFinite(
+          useCount
+        )
+          ? useCount
+          : 0,
+
+      remainingUses:
+        Number.isFinite(
+          remainingUses
+        )
+          ? remainingUses
+          : Math.max(
+              0,
+              maxUses -
+                useCount
+            ),
+
+      expiresAt:
+        invite.expiresAt ??
+        invite.expires_at ??
+        null,
+    };
+  }
+
   // ==========================================================
   // INVITE VALIDATION
   // ==========================================================
 
   const validateInviteCode =
-    useCallback(async (code) => {
-      const cleanedCode =
-        String(code || "")
-          .trim()
-          .toUpperCase();
+    useCallback(
+      async (code) => {
+        const cleanedCode =
+          String(code || "")
+            .trim()
+            .toUpperCase();
 
-      if (!cleanedCode) {
-        setInviteState("invalid");
-
-        setInviteError(
-          "Please enter your invitation code."
-        );
-
-        return;
-      }
-
-      setInviteChecking(true);
-      setInviteState("checking");
-      setInviteError("");
-
-      try {
-        const response =
-          await fetch(
-            `${INVITE_API_URL}/api/admin?action=validate&code=${encodeURIComponent(
-              cleanedCode
-            )}`,
-            {
-              method: "GET",
-              headers: {
-                Accept:
-                  "application/json",
-              },
-              credentials: "omit",
-              cache: "no-store",
-            }
+        if (!cleanedCode) {
+          setInviteState(
+            "invalid"
           );
 
-        const data =
-          await response
-            .json()
-            .catch(() => null);
+          setInviteInfo(null);
 
-        if (!response.ok) {
+          setInviteError(
+            "Please enter your invitation code."
+          );
+
+          return false;
+        }
+
+        setInviteChecking(true);
+        setInviteState("checking");
+        setInviteError("");
+
+        try {
+          const response =
+            await fetch(
+              `${INVITE_API_URL}/api/admin?action=validate&code=${encodeURIComponent(
+                cleanedCode
+              )}`,
+              {
+                method: "GET",
+                headers: {
+                  Accept:
+                    "application/json",
+                },
+                credentials: "omit",
+                cache: "no-store",
+              }
+            );
+
+          const data =
+            await response
+              .json()
+              .catch(
+                () => null
+              );
+
+          if (!response.ok) {
+            console.error(
+              "Invite API error:",
+              response.status,
+              data
+            );
+
+            setInviteState(
+              "invalid"
+            );
+
+            setInviteInfo(null);
+
+            if (
+              response.status ===
+              404
+            ) {
+              setInviteError(
+                "The invitation verification endpoint was not found. Please contact Fades Mail support."
+              );
+            } else if (
+              response.status ===
+                401 ||
+              response.status ===
+                403
+            ) {
+              setInviteError(
+                "The invitation server is not allowing public verification. Please contact Fades Mail support."
+              );
+            } else {
+              setInviteError(
+                data?.message ||
+                  data?.error ||
+                  "We couldn't verify your invitation. Please try again."
+              );
+            }
+
+            return false;
+          }
+
+          if (!data?.valid) {
+            setInviteState(
+              "invalid"
+            );
+
+            setInviteInfo(null);
+
+            setInviteError(
+              data?.message ||
+                "This invitation is invalid, expired, revoked, or has no remaining uses."
+            );
+
+            return false;
+          }
+
+          // ----------------------------------------------------
+          // VALID
+          // ----------------------------------------------------
+
+          const normalizedInvite =
+            normalizeInviteInfo(
+              data.invite
+            );
+
+          setInviteCode(
+            cleanedCode
+          );
+
+          setInviteInfo(
+            normalizedInvite
+          );
+
+          setInviteState(
+            "valid"
+          );
+
+          setInviteError("");
+
+          /*
+           * Keep the invitation in the URL.
+           */
+
+          const url =
+            new URL(
+              window.location.href
+            );
+
+          url.searchParams.set(
+            "invite",
+            cleanedCode
+          );
+
+          window.history.replaceState(
+            {},
+            "",
+            url.toString()
+          );
+
+          return true;
+        } catch (error) {
           console.error(
-            "Invite API error:",
-            response.status,
-            data
+            "Invite validation failed:",
+            error
           );
 
           setInviteState(
             "invalid"
           );
 
+          setInviteInfo(null);
+
+          setInviteError(
+            "Unable to connect to the invitation server. Please try again."
+          );
+
+          return false;
+        } finally {
+          setInviteChecking(
+            false
+          );
+        }
+      },
+      [inviteCode]
+    );
+
+  // ==========================================================
+  // REDEEM INVITE
+  // ==========================================================
+
+  const redeemInvite =
+    useCallback(
+      async (code) => {
+        const cleanedCode =
+          String(code || "")
+            .trim()
+            .toUpperCase();
+
+        if (!cleanedCode) {
+          return {
+            success: false,
+            error:
+              "Invite code is missing.",
+          };
+        }
+
+        /*
+         * Never redeem the same invite twice from
+         * this mounted signup screen.
+         */
+
+        if (
+          inviteRedeemedRef.current
+        ) {
+          return {
+            success: true,
+            alreadyRedeemed: true,
+          };
+        }
+
+        try {
+          const response =
+            await fetch(
+              `${INVITE_API_URL}/api/admin?action=redeem`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  Accept:
+                    "application/json",
+                },
+                credentials: "omit",
+                cache: "no-store",
+                body: JSON.stringify(
+                  {
+                    code:
+                      cleanedCode,
+                  }
+                ),
+              }
+            );
+
+          const data =
+            await response
+              .json()
+              .catch(
+                () => null
+              );
+
           if (
-            response.status ===
-            404
+            !response.ok ||
+            !data?.success
           ) {
-            setInviteError(
-              "The invitation verification endpoint was not found. Please contact Fades Mail support."
+            console.error(
+              "Invite redemption failed:",
+              response.status,
+              data
             );
-          } else if (
-            response.status ===
-              401 ||
-            response.status ===
-              403
-          ) {
-            setInviteError(
-              "The invitation server is not allowing public verification. Please contact Fades Mail support."
-            );
-          } else {
-            setInviteError(
-              data?.message ||
+
+            return {
+              success: false,
+              error:
                 data?.error ||
-                "We couldn't verify your invitation. Please try again."
+                data?.message ||
+                "The invitation could not be redeemed.",
+            };
+          }
+
+          /*
+           * Mark locally as redeemed only after
+           * the API confirms the redemption.
+           */
+
+          inviteRedeemedRef.current =
+            true;
+
+          const updatedInvite =
+            normalizeInviteInfo(
+              data.invite
+            );
+
+          if (updatedInvite) {
+            setInviteInfo(
+              updatedInvite
             );
           }
 
-          return;
+          return {
+            success: true,
+            invite:
+              data.invite ||
+              null,
+          };
+        } catch (error) {
+          console.error(
+            "Invite redemption request failed:",
+            error
+          );
+
+          return {
+            success: false,
+            error:
+              "We couldn't connect to the invitation server to complete your invitation.",
+          };
         }
-
-        if (!data?.valid) {
-          setInviteState(
-            "invalid"
-          );
-
-          setInviteError(
-            data?.message ||
-              "This invitation is invalid, expired, or has already been used."
-          );
-
-          return;
-        }
-
-        // ------------------------------------------------------
-        // VALID
-        // ------------------------------------------------------
-
-        setInviteCode(
-          cleanedCode
-        );
-
-        setInviteState(
-          "valid"
-        );
-
-        setInviteError("");
-
-        // Keep the invitation in the URL.
-        const url =
-          new URL(
-            window.location.href
-          );
-
-        url.searchParams.set(
-          "invite",
-          cleanedCode
-        );
-
-        window.history.replaceState(
-          {},
-          "",
-          url.toString()
-        );
-      } catch (error) {
-        console.error(
-          "Invite validation failed:",
-          error
-        );
-
-        setInviteState(
-          "invalid"
-        );
-
-        setInviteError(
-          "Unable to connect to the invitation server. Please try again."
-        );
-      } finally {
-        setInviteChecking(
-          false
-        );
-      }
-    }, []);
+      },
+      [normalizeInviteInfo]
+    );
 
   // ==========================================================
   // INITIAL INVITE CHECK
@@ -321,9 +661,20 @@ export default function AuthScreen({ auth }) {
 
   useEffect(() => {
     if (isSignIn) {
-      setInviteState("signin");
+      setInviteState(
+        "signin"
+      );
+
       setInviteError("");
-      setInviteChecking(false);
+
+      setInviteInfo(null);
+
+      setInviteChecking(
+        false
+      );
+
+      signupAttemptRef.current =
+        false;
 
       return;
     }
@@ -355,6 +706,8 @@ export default function AuthScreen({ auth }) {
       );
 
       setInviteError("");
+
+      setInviteInfo(null);
     }
   }, [
     isSignIn,
@@ -373,7 +726,13 @@ export default function AuthScreen({ auth }) {
         .toUpperCase();
 
     setInviteCode(value);
-    setInviteState("invalid");
+
+    setInviteState(
+      "invalid"
+    );
+
+    setInviteInfo(null);
+
     setInviteError("");
 
     const url =
@@ -392,7 +751,11 @@ export default function AuthScreen({ auth }) {
     );
   }
 
-  function handleInviteSubmit(
+  // ==========================================================
+  // INVITE SUBMIT
+  // ==========================================================
+
+  async function handleInviteSubmit(
     event
   ) {
     event.preventDefault();
@@ -401,7 +764,7 @@ export default function AuthScreen({ auth }) {
       return;
     }
 
-    validateInviteCode(
+    await validateInviteCode(
       inviteCode
     );
   }
@@ -411,9 +774,21 @@ export default function AuthScreen({ auth }) {
   // ==========================================================
 
   function resetInvite() {
-    setInviteState("invalid");
+    setInviteState(
+      "invalid"
+    );
+
     setInviteError("");
+
     setInviteCode("");
+
+    setInviteInfo(null);
+
+    inviteRedeemedRef.current =
+      false;
+
+    signupAttemptRef.current =
+      false;
 
     const url =
       new URL(
@@ -443,9 +818,13 @@ export default function AuthScreen({ auth }) {
   // SUBMIT SIGNUP
   // ==========================================================
 
-  function handleSignupSubmit(
+  async function handleSignupSubmit(
     event
   ) {
+    /*
+     * Never allow signup without a verified invite.
+     */
+
     if (
       inviteState !== "valid"
     ) {
@@ -459,17 +838,149 @@ export default function AuthScreen({ auth }) {
     }
 
     /*
-     * Keep the invite code available
-     * to the existing auth implementation.
-     *
-     * If useAuth later exposes setInviteCode,
-     * that can replace this compatibility
-     * assignment.
+     * Make absolutely sure we have an invite code.
      */
-    auth.inviteCode =
-      inviteCode;
 
-    submitAuth(event);
+    const cleanedCode =
+      String(inviteCode || "")
+        .trim()
+        .toUpperCase();
+
+    if (!cleanedCode) {
+      event.preventDefault();
+
+      setInviteError(
+        "Your invitation code is missing. Please verify your invitation again."
+      );
+
+      return;
+    }
+
+    /*
+     * Keep the invite code available to the existing
+     * authentication implementation.
+     */
+
+    auth.inviteCode =
+      cleanedCode;
+
+    /*
+     * Tell the auth system which invitation is being
+     * used. This is useful if your submitAuth implementation
+     * already supports inviteCode.
+     */
+
+    if (
+      typeof auth.setInviteCode ===
+      "function"
+    ) {
+      auth.setInviteCode(
+        cleanedCode
+      );
+    }
+
+    signupAttemptRef.current =
+      true;
+
+    try {
+      /*
+       * IMPORTANT:
+       *
+       * submitAuth should return after the account creation
+       * request has completed.
+       *
+       * The invite is redeemed only AFTER submitAuth succeeds.
+       */
+
+      const result =
+        await submitAuth(event);
+
+      /*
+       * If submitAuth explicitly tells us that signup failed,
+       * do NOT consume the invite.
+       */
+
+      if (
+        result === false ||
+        result?.success === false ||
+        result?.ok === false
+      ) {
+        signupAttemptRef.current =
+          false;
+
+        return;
+      }
+
+      /*
+       * Give the authentication request a moment to finish
+       * updating its own state if it returns without a
+       * structured result.
+       */
+
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            50
+          )
+      );
+
+      /*
+       * If an auth error has already been reported, do not
+       * consume the invitation.
+       */
+
+      if (authError) {
+        signupAttemptRef.current =
+          false;
+
+        return;
+      }
+
+      /*
+       * REDEEM THE INVITE.
+       *
+       * This is the piece that was missing from the old file.
+       */
+
+      const redemption =
+        await redeemInvite(
+          cleanedCode
+        );
+
+      if (
+        !redemption.success
+      ) {
+        console.error(
+          "Account creation completed, but invite redemption failed:",
+          redemption.error
+        );
+
+        /*
+         * We intentionally do not pretend the invite was
+         * redeemed if the API rejected it.
+         *
+         * The account has already been created at this point,
+         * so this should also be logged server-side in a
+         * production system.
+         */
+
+        return;
+      }
+
+      console.log(
+        "Fades Mail invitation redeemed successfully:",
+        redemption.invite
+      );
+    } catch (error) {
+      console.error(
+        "Signup submission failed:",
+        error
+      );
+
+      signupAttemptRef.current =
+        false;
+    }
   }
 
   // ==========================================================
@@ -479,6 +990,7 @@ export default function AuthScreen({ auth }) {
   return (
     <main className="auth-page">
       {/* Same background for BOTH sign-in and signup */}
+
       <DoodleBackground />
 
       <div className="auth-shell">
@@ -804,6 +1316,43 @@ export default function AuthScreen({ auth }) {
                       </span>
                     </div>
                   </div>
+
+                  {/* ================================================= */}
+                  {/* INVITE USAGE */}
+                  {/* ================================================= */}
+
+                  {inviteInfo && (
+                    <div className="invite-usage-card">
+                      <div>
+                        <span>
+                          Invitation
+                          usage
+                        </span>
+
+                        <strong>
+                          {
+                            inviteInfo.useCount
+                          }{" "}
+                          /{" "}
+                          {
+                            inviteInfo.maxUses
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Remaining
+                        </span>
+
+                        <strong>
+                          {
+                            inviteInfo.remainingUses
+                          }
+                        </strong>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="auth-heading">
                     <div className="auth-heading-badge">
