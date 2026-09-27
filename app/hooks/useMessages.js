@@ -16,26 +16,24 @@ import { countLabel } from "../lib/format";
 // FADES MAIL — MESSAGE HOOK
 // ============================================================
 //
-// Live mail:
-//   - Refreshes inbox every 10 seconds
-//   - Refreshes folder/unread counts
-//   - Immediately refreshes when returning to the tab
+// Live mail system:
 //
-// Notifications:
-//   - Desktop notifications
-//   - Notification sounds
-//   - Detects newly arrived messages
-//   - Does not notify for existing mail on first load
-//   - Prevents duplicate notifications
+//   • Visible mailbox refreshes every 10 seconds
+//   • Inbox is ALWAYS checked independently
+//   • Works even while viewing Sent / Trash / Spam / etc.
+//   • Desktop notifications for newly detected mail
+//   • Sound notifications for newly detected mail
+//   • Existing mail is NOT notified on initial load
+//   • Duplicate notifications are prevented
+//   • Returning to the tab triggers an immediate refresh
 //
-// No WebSocket / SSE / push backend is required.
+// IMPORTANT:
+// This uses browser polling rather than WebSockets / SSE / Push.
 //
-// The browser simply polls the existing Fades Mail API.
+// Browsers may throttle JavaScript timers when a tab is heavily
+// backgrounded. For guaranteed notifications while the browser
+// is closed, Web Push + a service worker would be required.
 //
-
-// ============================================================
-// CONFIG
-// ============================================================
 
 const LIVE_REFRESH_INTERVAL = 10 * 1000;
 
@@ -47,6 +45,8 @@ const SOUND_NOTIFICATIONS_KEY =
 
 const NOTIFICATION_SOUND =
   "/sounds/new-mail.mp3";
+
+const MESSAGE_LIMIT = 100;
 
 // ============================================================
 // BULK HELPER
@@ -71,10 +71,6 @@ async function runBulk(ids, request) {
 // HOOK
 // ============================================================
 
-/**
- * Message list + message actions + live mail
- * notification system.
- */
 export function useMessages({
   mailbox,
   resolvedActiveFolder,
@@ -83,7 +79,12 @@ export function useMessages({
   showToast,
   onUnauthorized,
 }) {
+  // ==========================================================
+  // STATE
+  // ==========================================================
+
   const [messages, setMessages] = useState([]);
+
   const [selectedMessage, setSelectedMessage] =
     useState(null);
 
@@ -96,29 +97,38 @@ export function useMessages({
   const [actionLoading, setActionLoading] =
     useState(false);
 
-  // ----------------------------------------------------------
-  // Refs
-  // ----------------------------------------------------------
+  // ==========================================================
+  // REFS
+  // ==========================================================
 
-  // Prevent overlapping silent refreshes.
+  // Prevent overlapping live refresh requests.
   const refreshInProgressRef = useRef(false);
 
-  // IDs of messages that we've already seen.
+  // Prevent overlapping Inbox notification checks.
+  const inboxCheckInProgressRef = useRef(false);
+
+  // IDs that we have already seen.
   const seenMessageIdsRef = useRef(new Set());
 
-  // Whether we've established the initial inbox state.
+  // Prevent notifications for the initial Inbox load.
   const notificationInitializedRef =
     useRef(false);
 
-  // Keep the latest loadFolders function available
-  // to the polling system.
-  const loadFoldersRef = useRef(loadFolders);
+  // Keep the latest folder loader without causing
+  // the polling effect to constantly restart.
+  const loadFoldersRef =
+    useRef(loadFolders);
 
   useEffect(() => {
     loadFoldersRef.current = loadFolders;
   }, [loadFolders]);
 
-  const selectedCount = selectedIds.length;
+  // ==========================================================
+  // DERIVED STATE
+  // ==========================================================
+
+  const selectedCount =
+    selectedIds.length;
 
   const allVisibleSelected =
     messages.length > 0 &&
@@ -131,8 +141,13 @@ export function useMessages({
   // ==========================================================
 
   function desktopNotificationsEnabled() {
+    if (
+      typeof window === "undefined"
+    ) {
+      return false;
+    }
+
     return (
-      typeof window !== "undefined" &&
       localStorage.getItem(
         DESKTOP_NOTIFICATIONS_KEY
       ) === "true"
@@ -140,8 +155,13 @@ export function useMessages({
   }
 
   function soundNotificationsEnabled() {
+    if (
+      typeof window === "undefined"
+    ) {
+      return false;
+    }
+
     return (
-      typeof window !== "undefined" &&
       localStorage.getItem(
         SOUND_NOTIFICATIONS_KEY
       ) === "true"
@@ -153,31 +173,45 @@ export function useMessages({
   // ==========================================================
 
   function playNotificationSound() {
-    if (!soundNotificationsEnabled()) {
+    if (
+      !soundNotificationsEnabled()
+    ) {
       return;
     }
 
     try {
-      const audio = new Audio(
-        NOTIFICATION_SOUND
-      );
+      const audio =
+        new Audio(
+          NOTIFICATION_SOUND
+        );
 
       audio.volume = 0.75;
 
-      audio.play().catch(() => {
-        // Browsers may block autoplay depending on
-        // whether the user has interacted with the page.
-      });
+      const playPromise =
+        audio.play();
+
+      if (
+        playPromise &&
+        typeof playPromise.catch ===
+          "function"
+      ) {
+        playPromise.catch(() => {
+          // Browser may block background
+          // audio playback.
+        });
+      }
     } catch {
-      // Ignore sound errors.
+      // Ignore audio errors.
     }
   }
 
   // ==========================================================
-  // SHOW DESKTOP NOTIFICATION
+  // DESKTOP NOTIFICATION
   // ==========================================================
 
-  function showDesktopNotification(message) {
+  function showDesktopNotification(
+    message
+  ) {
     if (
       !desktopNotificationsEnabled()
     ) {
@@ -185,14 +219,21 @@ export function useMessages({
     }
 
     if (
-      typeof window === "undefined" ||
-      typeof Notification === "undefined"
+      typeof window === "undefined"
     ) {
       return;
     }
 
     if (
-      Notification.permission !== "granted"
+      typeof Notification ===
+      "undefined"
+    ) {
+      return;
+    }
+
+    if (
+      Notification.permission !==
+      "granted"
     ) {
       return;
     }
@@ -218,7 +259,11 @@ export function useMessages({
         );
 
       notification.onclick = () => {
-        window.focus();
+        try {
+          window.focus();
+        } catch {
+          // Ignore focus errors.
+        }
 
         notification.close();
       };
@@ -231,48 +276,72 @@ export function useMessages({
   }
 
   // ==========================================================
-  // NOTIFY ABOUT NEW MESSAGE
+  // NOTIFY
   // ==========================================================
 
-  function notifyNewMessage(message) {
-    showDesktopNotification(message);
+  function notifyNewMessage(
+    message
+  ) {
+    showDesktopNotification(
+      message
+    );
+
     playNotificationSound();
   }
 
   // ==========================================================
-  // TRACK INITIAL MESSAGES
+  // NOTIFICATION BASELINE
   // ==========================================================
+  //
+  // The first Inbox check establishes the current state.
+  //
+  // This is important because if the user already has
+  // 500 emails, opening Fades Mail should NOT make
+  // 500 notification sounds.
+  //
 
   function establishNotificationBaseline(
     messageList
   ) {
     seenMessageIdsRef.current.clear();
 
-    for (const message of messageList) {
-      if (message?.id !== undefined) {
+    for (
+      const message of messageList
+    ) {
+      if (
+        message?.id !== undefined &&
+        message?.id !== null
+      ) {
         seenMessageIdsRef.current.add(
           String(message.id)
         );
       }
     }
 
-    notificationInitializedRef.current = true;
+    notificationInitializedRef.current =
+      true;
   }
 
   // ==========================================================
-  // DETECT NEW MESSAGES
+  // DETECT NEW INBOX MESSAGES
   // ==========================================================
 
-  function detectNewMessages(messageList) {
-    if (!Array.isArray(messageList)) {
+  function detectNewMessages(
+    messageList
+  ) {
+    if (
+      !Array.isArray(messageList)
+    ) {
       return;
     }
 
-    // First request establishes the baseline.
+    // --------------------------------------------------------
+    // FIRST CHECK
+    // --------------------------------------------------------
     //
-    // This prevents Fades Mail from notifying the user
-    // about every email they already had when opening
-    // the website.
+    // Establish baseline without notifications.
+    //
+
     if (
       !notificationInitializedRef.current
     ) {
@@ -285,232 +354,427 @@ export function useMessages({
 
     const newMessages = [];
 
-    for (const message of messageList) {
-      if (!message?.id) continue;
+    // --------------------------------------------------------
+    // FIND NEW IDS
+    // --------------------------------------------------------
 
-      const id = String(message.id);
+    for (
+      const message of messageList
+    ) {
+      if (
+        !message?.id &&
+        message?.id !== 0
+      ) {
+        continue;
+      }
+
+      const id =
+        String(message.id);
 
       if (
-        !seenMessageIdsRef.current.has(id)
+        !seenMessageIdsRef.current.has(
+          id
+        )
       ) {
-        newMessages.push(message);
+        newMessages.push(
+          message
+        );
       }
     }
 
-    // Update the seen set.
-    for (const message of messageList) {
-      if (!message?.id) continue;
+    // --------------------------------------------------------
+    // UPDATE SEEN IDS
+    // --------------------------------------------------------
+
+    for (
+      const message of messageList
+    ) {
+      if (
+        !message?.id &&
+        message?.id !== 0
+      ) {
+        continue;
+      }
 
       seenMessageIdsRef.current.add(
         String(message.id)
       );
     }
 
-    // Notify for every genuinely new message.
-    //
-    // Usually there will only be one, but if the browser
-    // was asleep for a while and multiple messages arrived,
-    // this handles all of them.
-    for (const message of newMessages) {
-      notifyNewMessage(message);
+    // --------------------------------------------------------
+    // NOTIFY
+    // --------------------------------------------------------
+
+    for (
+      const message of newMessages
+    ) {
+      notifyNewMessage(
+        message
+      );
     }
   }
 
   // ==========================================================
-  // LOAD MESSAGES
+  // BUILD MESSAGE QUERY
   // ==========================================================
 
-  const loadMessages = useCallback(
-    async (options = {}) => {
-      if (!mailbox?.id) return;
+  function buildMessageParams({
+    folder,
+    starred,
+    searchValue,
+    mailboxId,
+  }) {
+    const params =
+      new URLSearchParams();
 
-      const silent =
-        options.silent === true;
+    params.set(
+      "mailboxId",
+      String(mailboxId)
+    );
 
-      // Prevent automatic refresh requests from
-      // overlapping.
-      if (
-        silent &&
-        refreshInProgressRef.current
-      ) {
-        return;
-      }
+    if (starred) {
+      params.set(
+        "starred",
+        "true"
+      );
+    } else if (folder) {
+      params.set(
+        "folder",
+        folder
+      );
+    }
 
-      if (silent) {
-        refreshInProgressRef.current = true;
-      } else {
-        setMessagesLoading(true);
-      }
+    if (
+      searchValue &&
+      searchValue.trim()
+    ) {
+      params.set(
+        "search",
+        searchValue.trim()
+      );
+    }
 
-      try {
-        const params =
-          new URLSearchParams();
+    params.set(
+      "limit",
+      String(MESSAGE_LIMIT)
+    );
 
-        params.set(
-          "mailboxId",
-          String(mailbox.id)
-        );
+    params.set(
+      "offset",
+      "0"
+    );
+
+    return params;
+  }
+
+  // ==========================================================
+  // LOAD VISIBLE MESSAGES
+  // ==========================================================
+
+  const loadMessages =
+    useCallback(
+      async (options = {}) => {
+        if (!mailbox?.id) {
+          return [];
+        }
+
+        const silent =
+          options.silent === true;
 
         if (
-          resolvedActiveFolder ===
-          "starred"
+          silent &&
+          refreshInProgressRef.current
         ) {
-          params.set(
-            "starred",
-            "true"
-          );
-        } else if (
-          resolvedActiveFolder
-        ) {
-          params.set(
-            "folder",
-            resolvedActiveFolder
-          );
+          return [];
         }
 
-        if (search.trim()) {
-          params.set(
-            "search",
-            search.trim()
-          );
-        }
-
-        params.set(
-          "limit",
-          "100"
-        );
-
-        params.set(
-          "offset",
-          "0"
-        );
-
-        const response =
-          await apiFetch(
-            `/mail/messages?${params.toString()}`
-          );
-
-        if (!response.ok) {
-          if (
-            response.status === 401
-          ) {
-            onUnauthorized();
-          }
-
-          throw new Error(
-            `Message request failed (${response.status})`
-          );
-        }
-
-        const data =
-          await response.json();
-
-        const nextMessages =
-          Array.isArray(data)
-            ? data
-            : data.messages || [];
-
-        // Detect new messages BEFORE updating
-        // the visible inbox.
-        //
-        // Only run notification detection when
-        // we're looking at the inbox.
-        if (
-          resolvedActiveFolder ===
-            "inbox" ||
-          !resolvedActiveFolder
-        ) {
-          detectNewMessages(
-            nextMessages
-          );
-        }
-
-        setMessages(
-          nextMessages
-        );
-
-        // Silent live refreshes preserve the user's
-        // current selections.
-        if (!silent) {
-          setSelectedIds([]);
-        }
-      } catch (error) {
-        console.error(
-          "[Fades Mail] Message error:",
-          error
-        );
-
-        // Don't destroy the visible inbox during
-        // a temporary background network failure.
-        if (!silent) {
-          setMessages([]);
-          setSelectedIds([]);
-        }
-      } finally {
         if (silent) {
           refreshInProgressRef.current =
-            false;
+            true;
         } else {
-          setMessagesLoading(false);
+          setMessagesLoading(true);
         }
-      }
-    },
-    [
-      mailbox,
-      resolvedActiveFolder,
-      search,
-      onUnauthorized,
-    ]
-  );
+
+        try {
+          const params =
+            buildMessageParams({
+              mailboxId:
+                mailbox.id,
+              folder:
+                resolvedActiveFolder ===
+                "starred"
+                  ? null
+                  : resolvedActiveFolder,
+              starred:
+                resolvedActiveFolder ===
+                "starred",
+              searchValue:
+                search,
+            });
+
+          const response =
+            await apiFetch(
+              `/mail/messages?${params.toString()}`
+            );
+
+          if (!response.ok) {
+            if (
+              response.status ===
+              401
+            ) {
+              onUnauthorized();
+            }
+
+            throw new Error(
+              `Message request failed (${response.status})`
+            );
+          }
+
+          const data =
+            await response.json();
+
+          const nextMessages =
+            Array.isArray(data)
+              ? data
+              : data.messages ||
+                [];
+
+          setMessages(
+            nextMessages
+          );
+
+          // ----------------------------------------------------
+          // IMPORTANT:
+          //
+          // Notification detection is NOT handled here.
+          //
+          // The dedicated Inbox checker below handles
+          // notifications regardless of which folder the
+          // user is currently viewing.
+          // ----------------------------------------------------
+
+          if (!silent) {
+            setSelectedIds([]);
+          }
+
+          return nextMessages;
+        } catch (error) {
+          console.error(
+            "[Fades Mail] Message error:",
+            error
+          );
+
+          if (!silent) {
+            setMessages([]);
+            setSelectedIds([]);
+          }
+
+          return [];
+        } finally {
+          if (silent) {
+            refreshInProgressRef.current =
+              false;
+          } else {
+            setMessagesLoading(
+              false
+            );
+          }
+        }
+      },
+      [
+        mailbox,
+        resolvedActiveFolder,
+        search,
+        onUnauthorized,
+      ]
+    );
 
   // ==========================================================
-  // INITIAL LOAD
+  // CHECK INBOX FOR NEW MAIL
+  // ==========================================================
+  //
+  // THIS IS THE IMPORTANT PART.
+  //
+  // This request ALWAYS checks:
+  //
+  //     folder=inbox
+  //
+  // regardless of what folder the user is currently viewing.
+  //
+  // Therefore:
+  //
+  //   Sent     -> still detects Inbox mail
+  //   Starred  -> still detects Inbox mail
+  //   Trash    -> still detects Inbox mail
+  //   Spam     -> still detects Inbox mail
+  //   Search   -> still detects Inbox mail
+  //
+
+  const checkInboxForNewMail =
+    useCallback(
+      async () => {
+        if (!mailbox?.id) {
+          return;
+        }
+
+        if (
+          inboxCheckInProgressRef.current
+        ) {
+          return;
+        }
+
+        inboxCheckInProgressRef.current =
+          true;
+
+        try {
+          const params =
+            buildMessageParams({
+              mailboxId:
+                mailbox.id,
+              folder: "inbox",
+              starred: false,
+              searchValue: "",
+            });
+
+          const response =
+            await apiFetch(
+              `/mail/messages?${params.toString()}`
+            );
+
+          if (!response.ok) {
+            if (
+              response.status ===
+              401
+            ) {
+              onUnauthorized();
+            }
+
+            throw new Error(
+              `Inbox check failed (${response.status})`
+            );
+          }
+
+          const data =
+            await response.json();
+
+          const inboxMessages =
+            Array.isArray(data)
+              ? data
+              : data.messages ||
+                [];
+
+          detectNewMessages(
+            inboxMessages
+          );
+        } catch (error) {
+          console.error(
+            "[Fades Mail] Inbox check error:",
+            error
+          );
+        } finally {
+          inboxCheckInProgressRef.current =
+            false;
+        }
+      },
+      [
+        mailbox,
+        onUnauthorized,
+      ]
+    );
+
+  // ==========================================================
+  // INITIAL MESSAGE LOAD
   // ==========================================================
 
   useEffect(() => {
-    if (!mailbox) return;
+    if (!mailbox) {
+      return;
+    }
 
-    // Reset notification tracking when switching
-    // mailboxes/accounts.
+    // Reset notification state when switching
+    // accounts/mailboxes.
+
     seenMessageIdsRef.current.clear();
 
     notificationInitializedRef.current =
       false;
 
     loadMessages();
+
+    // Immediately establish the Inbox baseline.
+    //
+    // This means existing Inbox messages won't trigger
+    // notifications after the page loads.
+
+    checkInboxForNewMail();
   }, [
     mailbox,
     loadMessages,
+    checkInboxForNewMail,
   ]);
 
   // ==========================================================
   // LIVE MAIL POLLING
   // ==========================================================
+  //
+  // Two things happen every 10 seconds:
+  //
+  // 1. Refresh whatever folder the user is looking at.
+  // 2. Independently check Inbox for new mail.
+  //
+  // We DO NOT stop polling just because the tab is hidden.
+  //
+  // The browser may throttle timers in heavily backgrounded
+  // tabs, but we don't intentionally disable the polling.
+  //
 
   useEffect(() => {
-    if (!mailbox?.id) return;
+    if (!mailbox?.id) {
+      return;
+    }
 
     let interval = null;
     let active = true;
 
     async function refreshLive() {
-      if (!active) return;
-
-      // Don't poll hidden tabs.
-      if (
-        typeof document !==
-          "undefined" &&
-        document.visibilityState !==
-          "visible"
-      ) {
+      if (!active) {
         return;
       }
+
+      // ------------------------------------------------------
+      // Refresh the visible folder.
+      // ------------------------------------------------------
 
       await loadMessages({
         silent: true,
       });
 
-      await loadFoldersRef.current();
+      if (!active) {
+        return;
+      }
+
+      // ------------------------------------------------------
+      // ALWAYS check Inbox separately.
+      // ------------------------------------------------------
+
+      await checkInboxForNewMail();
+
+      if (!active) {
+        return;
+      }
+
+      // ------------------------------------------------------
+      // Refresh unread counts / folder counts.
+      // ------------------------------------------------------
+
+      try {
+        await loadFoldersRef.current();
+      } catch (error) {
+        console.error(
+          "[Fades Mail] Folder refresh error:",
+          error
+        );
+      }
     }
 
     function startPolling() {
@@ -532,21 +796,20 @@ export function useMessages({
     }
 
     function handleVisibilityChange() {
+      // ------------------------------------------------------
+      // When the user comes back to Fades Mail, immediately
+      // refresh instead of waiting up to 10 seconds.
+      // ------------------------------------------------------
+
       if (
         document.visibilityState ===
         "visible"
       ) {
-        // Immediately update when the user
-        // comes back to Fades Mail.
         refreshLive();
-
-        startPolling();
-      } else {
-        stopPolling();
       }
     }
 
-    // Start the live refresh timer.
+    // Start immediately.
     startPolling();
 
     document.addEventListener(
@@ -567,6 +830,7 @@ export function useMessages({
   }, [
     mailbox?.id,
     loadMessages,
+    checkInboxForNewMail,
   ]);
 
   // ==========================================================
@@ -600,7 +864,9 @@ export function useMessages({
   async function openMessage(
     message
   ) {
-    if (!mailbox?.id) return;
+    if (!mailbox?.id) {
+      return;
+    }
 
     try {
       const response =
@@ -650,13 +916,15 @@ export function useMessages({
   }
 
   // ==========================================================
-  // STAR
+  // TOGGLE STAR
   // ==========================================================
 
   async function toggleStar(
     message
   ) {
-    if (!mailbox?.id) return;
+    if (!mailbox?.id) {
+      return;
+    }
 
     const endpoint =
       message.isStarred
@@ -725,13 +993,15 @@ export function useMessages({
   }
 
   // ==========================================================
-  // READ / UNREAD
+  // TOGGLE READ
   // ==========================================================
 
   async function toggleRead(
     message
   ) {
-    if (!mailbox?.id) return;
+    if (!mailbox?.id) {
+      return;
+    }
 
     setActionLoading(true);
 
@@ -804,7 +1074,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // MOVE
+  // MOVE MESSAGE
   // ==========================================================
 
   async function moveMessage(
@@ -812,7 +1082,9 @@ export function useMessages({
     folder,
     options = {}
   ) {
-    if (!mailbox?.id) return false;
+    if (!mailbox?.id) {
+      return false;
+    }
 
     const silent =
       options.silent || false;
@@ -882,7 +1154,9 @@ export function useMessages({
     message,
     options = {}
   ) {
-    if (!mailbox?.id) return false;
+    if (!mailbox?.id) {
+      return false;
+    }
 
     const silent =
       options.silent || false;
@@ -940,7 +1214,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // TRASH
+  // TRASH BUTTON
   // ==========================================================
 
   async function handleTrashButton(
@@ -955,7 +1229,9 @@ export function useMessages({
           "Permanently delete this message? This cannot be undone."
         );
 
-      if (!confirmed) return;
+      if (!confirmed) {
+        return;
+      }
 
       const success =
         await deleteMessagePermanently(
@@ -996,6 +1272,10 @@ export function useMessages({
     }
   }
 
+  // ==========================================================
+  // NOT SPAM
+  // ==========================================================
+
   async function markAsNotSpam(
     message
   ) {
@@ -1012,7 +1292,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // SELECTION
+  // SELECT MESSAGE
   // ==========================================================
 
   function toggleSelectedMessage(
@@ -1031,6 +1311,10 @@ export function useMessages({
     );
   }
 
+  // ==========================================================
+  // SELECT ALL
+  // ==========================================================
+
   function toggleSelectAll() {
     if (allVisibleSelected) {
       setSelectedIds([]);
@@ -1039,10 +1323,15 @@ export function useMessages({
 
     setSelectedIds(
       messages.map(
-        (message) => message.id
+        (message) =>
+          message.id
       )
     );
   }
+
+  // ==========================================================
+  // CLEAR SELECTION
+  // ==========================================================
 
   function clearSelection() {
     setSelectedIds([]);
@@ -1115,7 +1404,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // BULK READ
+  // BULK MARK READ
   // ==========================================================
 
   async function bulkMarkRead() {
@@ -1275,11 +1564,14 @@ export function useMessages({
         "Permanently delete all messages in Trash? This cannot be undone."
       );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     await deleteForever(
       messages.map(
-        (message) => message.id
+        (message) =>
+          message.id
       ),
       "Empty trash error",
       "Unable to empty trash."
@@ -1287,7 +1579,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // RETURN
+  // RETURN API
   // ==========================================================
 
   return {
@@ -1327,4 +1619,3 @@ export function useMessages({
     emptyTrash,
   };
 }
-
