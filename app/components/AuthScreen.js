@@ -1,10 +1,13 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Logo from "./Logo";
 
 const INVITE_API_URL = "https://invite-api.fades.lol";
+
+// ============================================================
+// DOODLE BACKGROUND
+// ============================================================
 
 function DoodleBackground() {
   const doodles = [
@@ -23,7 +26,10 @@ function DoodleBackground() {
   ];
 
   return (
-    <div className="invite-doodles" aria-hidden="true">
+    <div
+      className="invite-doodles"
+      aria-hidden="true"
+    >
       <div className="invite-doodles-grid" />
 
       {doodles.map((item, index) => (
@@ -44,11 +50,16 @@ function DoodleBackground() {
   );
 }
 
+// ============================================================
+// INVITE ICON
+// ============================================================
+
 function InviteIcon({ state }) {
   if (state === "checking") {
     return (
       <div className="invite-icon invite-icon-checking">
         <div className="invite-spinner" />
+
         <span>✉</span>
       </div>
     );
@@ -57,7 +68,10 @@ function InviteIcon({ state }) {
   if (state === "valid") {
     return (
       <div className="invite-icon invite-icon-success">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             d="M5 12.5l4.2 4.2L19 7"
             fill="none"
@@ -73,7 +87,10 @@ function InviteIcon({ state }) {
 
   return (
     <div className="invite-icon invite-icon-locked">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
         <rect
           x="5"
           y="10"
@@ -93,14 +110,20 @@ function InviteIcon({ state }) {
           strokeLinecap="round"
         />
 
-        <circle cx="12" cy="15" r="1.1" fill="currentColor" />
+        <circle
+          cx="12"
+          cy="15"
+          r="1.1"
+          fill="currentColor"
+        />
       </svg>
     </div>
   );
 }
 
-// Sign in / create account screen.
-// auth comes from useAuth().
+// ============================================================
+// AUTH SCREEN
+// ============================================================
 
 export default function AuthScreen({ auth }) {
   const {
@@ -117,196 +140,378 @@ export default function AuthScreen({ auth }) {
     toggleAuthMode,
   } = auth;
 
-  const isSignIn = authMode === "signin";
+  const isSignIn =
+    authMode === "signin";
 
-  const [inviteState, setInviteState] = useState(
-    isSignIn ? "signin" : "invalid"
+  const [
+    inviteState,
+    setInviteState,
+  ] = useState(
+    isSignIn
+      ? "signin"
+      : "invalid"
   );
 
-  const [inviteError, setInviteError] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteChecking, setInviteChecking] = useState(false);
+  const [
+    inviteError,
+    setInviteError,
+  ] = useState("");
 
-  // =========================================================
+  const [
+    inviteCode,
+    setInviteCode,
+  ] = useState("");
+
+  const [
+    inviteChecking,
+    setInviteChecking,
+  ] = useState(false);
+
+  // ==========================================================
   // INVITE VALIDATION
-  // =========================================================
+  // ==========================================================
 
-  const validateInviteCode = useCallback(async (code) => {
-    const cleanedCode = String(code || "")
-      .trim()
-      .toUpperCase();
+  const validateInviteCode =
+    useCallback(async (code) => {
+      const cleanedCode =
+        String(code || "")
+          .trim()
+          .toUpperCase();
 
-    if (!cleanedCode) {
-      setInviteState("invalid");
-      setInviteError("Please enter your invitation code.");
-      return;
-    }
-
-    setInviteChecking(true);
-    setInviteState("checking");
-    setInviteError("");
-
-    try {
-      const response = await fetch(
-        `${INVITE_API_URL}/api/admin?action=validate&code=${encodeURIComponent(
-          cleanedCode
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-          credentials: "omit",
-          cache: "no-store",
-        }
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        console.error("Invite API error:", response.status, data);
-
-        setInviteState("invalid");
-
-        if (response.status === 404) {
-          setInviteError(
-            "The invitation verification endpoint was not found. Please contact Fades Mail support."
-          );
-        } else if (response.status === 401 || response.status === 403) {
-          setInviteError(
-            "The invitation server is not allowing public verification. Please contact Fades Mail support."
-          );
-        } else {
-          setInviteError(
-            data?.message ||
-              data?.error ||
-              "We couldn't verify your invitation. Please try again."
-          );
-        }
-
-        return;
-      }
-
-      if (!data?.valid) {
+      if (!cleanedCode) {
         setInviteState("invalid");
 
         setInviteError(
-          data?.message ||
-            "This invitation is invalid, expired, or has already been used."
+          "Please enter your invitation code."
         );
 
         return;
       }
 
-      // Invitation is valid.
-      setInviteCode(cleanedCode);
-      setInviteState("valid");
+      setInviteChecking(true);
+      setInviteState("checking");
       setInviteError("");
 
-      // Keep the code in the URL so a refresh doesn't lose it.
-      const url = new URL(window.location.href);
+      try {
+        const response =
+          await fetch(
+            `${INVITE_API_URL}/api/admin?action=validate&code=${encodeURIComponent(
+              cleanedCode
+            )}`,
+            {
+              method: "GET",
+              headers: {
+                Accept:
+                  "application/json",
+              },
+              credentials: "omit",
+              cache: "no-store",
+            }
+          );
 
-      url.searchParams.set("invite", cleanedCode);
+        const data =
+          await response
+            .json()
+            .catch(() => null);
 
-      window.history.replaceState({}, "", url.toString());
-    } catch (error) {
-      console.error("Invite validation failed:", error);
+        if (!response.ok) {
+          console.error(
+            "Invite API error:",
+            response.status,
+            data
+          );
 
-      setInviteState("invalid");
+          setInviteState(
+            "invalid"
+          );
 
-      setInviteError(
-        "Unable to connect to the invitation server. Please try again."
-      );
-    } finally {
-      setInviteChecking(false);
-    }
-  }, []);
+          if (
+            response.status ===
+            404
+          ) {
+            setInviteError(
+              "The invitation verification endpoint was not found. Please contact Fades Mail support."
+            );
+          } else if (
+            response.status ===
+              401 ||
+            response.status ===
+              403
+          ) {
+            setInviteError(
+              "The invitation server is not allowing public verification. Please contact Fades Mail support."
+            );
+          } else {
+            setInviteError(
+              data?.message ||
+                data?.error ||
+                "We couldn't verify your invitation. Please try again."
+            );
+          }
 
-  // =========================================================
-  // AUTOMATICALLY CHECK INVITE LINKS
-  // =========================================================
+          return;
+        }
+
+        if (!data?.valid) {
+          setInviteState(
+            "invalid"
+          );
+
+          setInviteError(
+            data?.message ||
+              "This invitation is invalid, expired, or has already been used."
+          );
+
+          return;
+        }
+
+        // ------------------------------------------------------
+        // VALID
+        // ------------------------------------------------------
+
+        setInviteCode(
+          cleanedCode
+        );
+
+        setInviteState(
+          "valid"
+        );
+
+        setInviteError("");
+
+        // Keep the invitation in the URL.
+        const url =
+          new URL(
+            window.location.href
+          );
+
+        url.searchParams.set(
+          "invite",
+          cleanedCode
+        );
+
+        window.history.replaceState(
+          {},
+          "",
+          url.toString()
+        );
+      } catch (error) {
+        console.error(
+          "Invite validation failed:",
+          error
+        );
+
+        setInviteState(
+          "invalid"
+        );
+
+        setInviteError(
+          "Unable to connect to the invitation server. Please try again."
+        );
+      } finally {
+        setInviteChecking(
+          false
+        );
+      }
+    }, []);
+
+  // ==========================================================
+  // INITIAL INVITE CHECK
+  // ==========================================================
 
   useEffect(() => {
     if (isSignIn) {
       setInviteState("signin");
       setInviteError("");
       setInviteChecking(false);
+
       return;
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const codeFromUrl = params.get("invite");
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const codeFromUrl =
+      params.get("invite");
 
     if (codeFromUrl) {
-      const cleanedCode = codeFromUrl.trim().toUpperCase();
+      const cleanedCode =
+        codeFromUrl
+          .trim()
+          .toUpperCase();
 
-      setInviteCode(cleanedCode);
-      validateInviteCode(cleanedCode);
+      setInviteCode(
+        cleanedCode
+      );
+
+      validateInviteCode(
+        cleanedCode
+      );
     } else {
-      // No invite in URL.
-      // Allow the user to manually enter one.
-      setInviteState("invalid");
+      setInviteState(
+        "invalid"
+      );
+
       setInviteError("");
     }
-  }, [isSignIn, validateInviteCode]);
+  }, [
+    isSignIn,
+    validateInviteCode,
+  ]);
 
-  // =========================================================
+  // ==========================================================
   // INVITE INPUT
-  // =========================================================
+  // ==========================================================
 
-  function handleInviteChange(event) {
-    const value = event.target.value.toUpperCase();
+  function handleInviteChange(
+    event
+  ) {
+    const value =
+      event.target.value
+        .toUpperCase();
 
     setInviteCode(value);
     setInviteState("invalid");
     setInviteError("");
 
-    // Remove the old invite from the URL if the user edits it.
-    const url = new URL(window.location.href);
+    const url =
+      new URL(
+        window.location.href
+      );
 
-    url.searchParams.delete("invite");
+    url.searchParams.delete(
+      "invite"
+    );
 
-    window.history.replaceState({}, "", url.toString());
+    window.history.replaceState(
+      {},
+      "",
+      url.toString()
+    );
   }
 
-  function handleInviteSubmit(event) {
+  function handleInviteSubmit(
+    event
+  ) {
     event.preventDefault();
 
-    if (inviteChecking) return;
+    if (inviteChecking) {
+      return;
+    }
 
-    validateInviteCode(inviteCode);
+    validateInviteCode(
+      inviteCode
+    );
   }
 
-  // =========================================================
-  // SIGNUP ACCESS
-  // =========================================================
+  // ==========================================================
+  // CHANGE INVITE
+  // ==========================================================
+
+  function resetInvite() {
+    setInviteState("invalid");
+    setInviteError("");
+    setInviteCode("");
+
+    const url =
+      new URL(
+        window.location.href
+      );
+
+    url.searchParams.delete(
+      "invite"
+    );
+
+    window.history.replaceState(
+      {},
+      "",
+      url.toString()
+    );
+  }
+
+  // ==========================================================
+  // SIGNUP STATE
+  // ==========================================================
 
   const signupBlocked =
-    !isSignIn && inviteState !== "valid";
+    !isSignIn &&
+    inviteState !== "valid";
 
-  // =========================================================
+  // ==========================================================
+  // SUBMIT SIGNUP
+  // ==========================================================
+
+  function handleSignupSubmit(
+    event
+  ) {
+    if (
+      inviteState !== "valid"
+    ) {
+      event.preventDefault();
+
+      setInviteError(
+        "Please verify your invitation first."
+      );
+
+      return;
+    }
+
+    /*
+     * Keep the invite code available
+     * to the existing auth implementation.
+     *
+     * If useAuth later exposes setInviteCode,
+     * that can replace this compatibility
+     * assignment.
+     */
+    auth.inviteCode =
+      inviteCode;
+
+    submitAuth(event);
+  }
+
+  // ==========================================================
   // RENDER
-  // =========================================================
+  // ==========================================================
 
   return (
     <main className="auth-page">
-      {!isSignIn && <DoodleBackground />}
+      {/* Same background for BOTH sign-in and signup */}
+      <DoodleBackground />
 
       <div className="auth-shell">
+        {/* ================================================== */}
+        {/* BRAND */}
+        {/* ================================================== */}
+
         <div className="auth-brand">
           <Logo size={40} />
 
           <div>
-            <strong>Fades Mail</strong>
-            <span>Private email, beautifully simple.</span>
+            <strong>
+              Fades Mail
+            </strong>
+
+            <span>
+              Private email, beautifully simple.
+            </span>
           </div>
         </div>
 
+        {/* ================================================== */}
+        {/* CARD */}
+        {/* ================================================== */}
+
         <div
           className={`auth-card ${
-            !isSignIn ? "auth-card-invite" : ""
+            !isSignIn
+              ? "auth-card-invite"
+              : "auth-card-signin"
           } ${
-            inviteState === "valid"
+            inviteState ===
+            "valid"
               ? "auth-card-verified"
               : ""
           }`}
@@ -322,41 +527,71 @@ export default function AuthScreen({ auth }) {
                   Welcome back
                 </div>
 
-                <h1>Welcome back.</h1>
+                <h1>
+                  Welcome back.
+                </h1>
 
                 <p>
-                  Sign in to continue to your Fades Mail
+                  Sign in to continue
+                  to your Fades Mail
                   account.
                 </p>
               </div>
 
               <form
                 className="auth-form"
-                onSubmit={submitAuth}
+                onSubmit={
+                  submitAuth
+                }
               >
+                {/* EMAIL */}
+
                 <label>
-                  <span>Email</span>
+                  <span>
+                    Email
+                  </span>
 
                   <input
                     type="email"
-                    value={email}
-                    onChange={(event) =>
-                      setEmail(event.target.value)
+                    value={
+                      email
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setEmail(
+                        event
+                          .target
+                          .value
+                      )
                     }
                     placeholder="you@example.com"
                     autoComplete="email"
+                    autoFocus
                     required
                   />
                 </label>
 
+                {/* PASSWORD */}
+
                 <label>
-                  <span>Password</span>
+                  <span>
+                    Password
+                  </span>
 
                   <input
                     type="password"
-                    value={password}
-                    onChange={(event) =>
-                      setPassword(event.target.value)
+                    value={
+                      password
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPassword(
+                        event
+                          .target
+                          .value
+                      )
                     }
                     placeholder="Your password"
                     autoComplete="current-password"
@@ -364,21 +599,34 @@ export default function AuthScreen({ auth }) {
                   />
                 </label>
 
+                {/* ERROR */}
+
                 {authError && (
                   <div className="auth-error">
-                    <span>!</span>
-                    {authError}
+                    <span>
+                      !
+                    </span>
+
+                    <span>
+                      {
+                        authError
+                      }
+                    </span>
                   </div>
                 )}
+
+                {/* SUBMIT */}
 
                 <button
                   className="auth-submit"
                   type="submit"
-                  disabled={authSubmitting}
+                  disabled={
+                    authSubmitting
+                  }
                 >
                   <span>
                     {authSubmitting
-                      ? "Please wait..."
+                      ? "Signing in..."
                       : "Sign in"}
                   </span>
 
@@ -392,13 +640,18 @@ export default function AuthScreen({ auth }) {
             </>
           ) : (
             <>
-              {/* ============================================= */}
-              {/* SIGNUP: INVITE VERIFICATION */}
-              {/* ============================================= */}
+              {/* ================================================= */}
+              {/* SIGNUP — INVITE GATE */}
+              {/* ================================================= */}
 
-              {inviteState !== "valid" ? (
+              {inviteState !==
+              "valid" ? (
                 <div className="invite-gate">
-                  <InviteIcon state={inviteState} />
+                  <InviteIcon
+                    state={
+                      inviteState
+                    }
+                  />
 
                   <div className="invite-gate-heading">
                     <div className="invite-status invite-status-locked">
@@ -410,30 +663,49 @@ export default function AuthScreen({ auth }) {
                     </h1>
 
                     <p>
-                      Fades Mail is currently private.
-                      Enter your invitation code below
-                      to create your mailbox.
+                      Fades Mail is
+                      currently
+                      private. Enter
+                      your invitation
+                      code below to
+                      create your
+                      mailbox.
                     </p>
                   </div>
 
-                  {/* INVITE CODE FORM */}
+                  {/* INVITE FORM */}
 
                   <form
                     className="invite-entry"
-                    onSubmit={handleInviteSubmit}
+                    onSubmit={
+                      handleInviteSubmit
+                    }
                   >
                     <label className="invite-code-label">
-                      <span>Invitation code</span>
+                      <span>
+                        Invitation
+                        code
+                      </span>
 
                       <input
                         type="text"
-                        value={inviteCode}
-                        onChange={handleInviteChange}
+                        value={
+                          inviteCode
+                        }
+                        onChange={
+                          handleInviteChange
+                        }
                         placeholder="FDS-XXXX-XXXX-XXXX"
                         autoComplete="off"
-                        spellCheck={false}
-                        maxLength={22}
-                        disabled={inviteChecking}
+                        spellCheck={
+                          false
+                        }
+                        maxLength={
+                          22
+                        }
+                        disabled={
+                          inviteChecking
+                        }
                         required
                       />
                     </label>
@@ -449,7 +721,11 @@ export default function AuthScreen({ auth }) {
                             We couldn't accept this invitation
                           </strong>
 
-                          <span>{inviteError}</span>
+                          <span>
+                            {
+                              inviteError
+                            }
+                          </span>
                         </div>
                       </div>
                     )}
@@ -488,14 +764,16 @@ export default function AuthScreen({ auth }) {
                     </span>
 
                     <span>
-                      Fades Mail is invite-only by design.
+                      Fades Mail is
+                      invite-only by
+                      design.
                     </span>
                   </div>
                 </div>
               ) : (
-                /* =========================================== */
-                /* SIGNUP: VALID INVITE */
-                /* =========================================== */
+                /* =============================================== */
+                /* SIGNUP — VERIFIED */
+                /* =============================================== */
 
                 <div className="signup-content">
                   <div className="verified-banner">
@@ -521,7 +799,8 @@ export default function AuthScreen({ auth }) {
                       </strong>
 
                       <span>
-                        You're invited to Fades Mail.
+                        You're invited
+                        to Fades Mail.
                       </span>
                     </div>
                   </div>
@@ -532,68 +811,88 @@ export default function AuthScreen({ auth }) {
                     </div>
 
                     <h1>
-                      Create your mailbox.
+                      Create your
+                      mailbox.
                     </h1>
 
                     <p>
-                      Choose your Fades Mail address and
-                      create your account.
+                      Choose your
+                      Fades Mail
+                      address and
+                      create your
+                      account.
                     </p>
                   </div>
 
                   <form
                     className="auth-form"
-                    onSubmit={(event) => {
-                      // Prevent signup if the invite is not valid.
-                      if (inviteState !== "valid") {
-                        event.preventDefault();
-                        setInviteError(
-                          "Please verify your invitation first."
-                        );
-                        return;
-                      }
-
-                      // Ensure the invitation code is available
-                      // to the signup handler.
-                      auth.inviteCode = inviteCode;
-
-                      submitAuth(event);
-                    }}
+                    onSubmit={
+                      handleSignupSubmit
+                    }
                   >
+                    {/* USERNAME */}
+
                     <label>
-                      <span>Username</span>
+                      <span>
+                        Username
+                      </span>
 
                       <div className="input-shell">
                         <input
                           type="text"
-                          value={username}
-                          onChange={(event) =>
-                            setUsername(event.target.value)
+                          value={
+                            username
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setUsername(
+                              event
+                                .target
+                                .value
+                            )
                           }
                           placeholder="yourname"
                           autoComplete="username"
                           required
                         />
 
-                        <small>@fades.lol</small>
+                        <small>
+                          @fades.lol
+                        </small>
                       </div>
 
                       <em>
-                        Your new address will{" "}
+                        Your new
+                        address will{" "}
                         {username
-                          ? `${username.toLowerCase()}@fades.lol`
+                          ? `${String(
+                              username
+                            ).toLowerCase()}@fades.lol`
                           : "yourname@fades.lol"}
                       </em>
                     </label>
 
+                    {/* EMAIL */}
+
                     <label>
-                      <span>Email</span>
+                      <span>
+                        Email
+                      </span>
 
                       <input
                         type="email"
-                        value={email}
-                        onChange={(event) =>
-                          setEmail(event.target.value)
+                        value={
+                          email
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setEmail(
+                            event
+                              .target
+                              .value
+                          )
                         }
                         placeholder="you@example.com"
                         autoComplete="email"
@@ -601,14 +900,26 @@ export default function AuthScreen({ auth }) {
                       />
                     </label>
 
+                    {/* PASSWORD */}
+
                     <label>
-                      <span>Password</span>
+                      <span>
+                        Password
+                      </span>
 
                       <input
                         type="password"
-                        value={password}
-                        onChange={(event) =>
-                          setPassword(event.target.value)
+                        value={
+                          password
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setPassword(
+                            event
+                              .target
+                              .value
+                          )
                         }
                         placeholder="Your password"
                         autoComplete="new-password"
@@ -616,12 +927,23 @@ export default function AuthScreen({ auth }) {
                       />
                     </label>
 
+                    {/* AUTH ERROR */}
+
                     {authError && (
                       <div className="auth-error">
-                        <span>!</span>
-                        {authError}
+                        <span>
+                          !
+                        </span>
+
+                        <span>
+                          {
+                            authError
+                          }
+                        </span>
                       </div>
                     )}
+
+                    {/* CREATE MAILBOX */}
 
                     <button
                       className="auth-submit"
@@ -648,25 +970,12 @@ export default function AuthScreen({ auth }) {
                   <button
                     type="button"
                     className="invite-change-button"
-                    onClick={() => {
-                      setInviteState("invalid");
-                      setInviteError("");
-                      setInviteCode("");
-
-                      const url = new URL(
-                        window.location.href
-                      );
-
-                      url.searchParams.delete("invite");
-
-                      window.history.replaceState(
-                        {},
-                        "",
-                        url.toString()
-                      );
-                    }}
+                    onClick={
+                      resetInvite
+                    }
                   >
-                    Use a different invitation code
+                    Use a different
+                    invitation code
                   </button>
                 </div>
               )}
@@ -674,7 +983,7 @@ export default function AuthScreen({ auth }) {
           )}
 
           {/* ================================================= */}
-          {/* SIGN IN / SIGNUP SWITCH */}
+          {/* AUTH MODE SWITCH */}
           {/* ================================================= */}
 
           <div className="auth-switch">
@@ -686,7 +995,9 @@ export default function AuthScreen({ auth }) {
 
             <button
               type="button"
-              onClick={toggleAuthMode}
+              onClick={
+                toggleAuthMode
+              }
             >
               {isSignIn
                 ? "Create one"
@@ -695,12 +1006,26 @@ export default function AuthScreen({ auth }) {
           </div>
         </div>
 
+        {/* ================================================== */}
+        {/* FOOTER */}
+        {/* ================================================== */}
+
         <div className="auth-footer">
-          <span>Fades Mail</span>
+          <span>
+            Fades Mail
+          </span>
+
           <span>•</span>
-          <span>fades.lol</span>
+
+          <span>
+            fades.lol
+          </span>
+
           <span>•</span>
-          <span>Private by design</span>
+
+          <span>
+            Private by design
+          </span>
         </div>
       </div>
     </main>
