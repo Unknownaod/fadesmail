@@ -27,10 +27,25 @@ export default function VerifyPage() {
   const [resending, setResending] =
     useState(false);
 
+  const [changingEmail, setChangingEmail] =
+    useState(false);
+
+  const [savingEmail, setSavingEmail] =
+    useState(false);
+
+  const [newEmail, setNewEmail] =
+    useState("");
+
   const [error, setError] =
     useState("");
 
   const [success, setSuccess] =
+    useState("");
+
+  const [emailError, setEmailError] =
+    useState("");
+
+  const [emailSuccess, setEmailSuccess] =
     useState("");
 
   const [cooldown, setCooldown] =
@@ -93,6 +108,12 @@ export default function VerifyPage() {
     setCode(value);
     setError("");
     setSuccess("");
+  }
+
+  function handleNewEmailChange(event) {
+    setNewEmail(event.target.value);
+    setEmailError("");
+    setEmailSuccess("");
   }
 
   async function verifyCode(event) {
@@ -250,6 +271,129 @@ export default function VerifyPage() {
     }
   }
 
+  async function changeEmail(event) {
+    event.preventDefault();
+
+    if (!user?.id) {
+      setEmailError(
+        "Your verification session is missing. Please sign up again."
+      );
+      return;
+    }
+
+    const email =
+      newEmail.trim().toLowerCase();
+
+    if (!email) {
+      setEmailError(
+        "Enter your new email address."
+      );
+      return;
+    }
+
+    if (
+      !email.includes("@") ||
+      !email.includes(".")
+    ) {
+      setEmailError(
+        "Enter a valid email address."
+      );
+      return;
+    }
+
+    if (
+      email ===
+      String(user.email || "")
+        .trim()
+        .toLowerCase()
+    ) {
+      setEmailError(
+        "This is already your current email address."
+      );
+      return;
+    }
+
+    setSavingEmail(true);
+    setEmailError("");
+    setEmailSuccess("");
+    setError("");
+    setSuccess("");
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/auth/verify/change-email`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            credentials: "include",
+
+            body: JSON.stringify({
+              userId: user.id,
+              email
+            })
+          }
+        );
+
+      let payload = null;
+
+      const text =
+        await response.text();
+
+      if (text) {
+        try {
+          payload =
+            JSON.parse(text);
+        } catch {
+          payload = null;
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            "Could not change your email address."
+        );
+      }
+
+      const updatedUser = {
+        ...user,
+        email:
+          payload?.email ||
+          email
+      };
+
+      setUser(updatedUser);
+
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(updatedUser)
+      );
+
+      setNewEmail("");
+      setCode("");
+      setCooldown(60);
+
+      setEmailSuccess(
+        "Your email was changed. A new verification code has been sent."
+      );
+
+      setChangingEmail(false);
+    } catch (err) {
+      setEmailError(
+        err?.message ||
+          "Could not change your email address."
+      );
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   function goBack() {
     sessionStorage.removeItem(
       STORAGE_KEY
@@ -287,6 +431,97 @@ export default function VerifyPage() {
             {user.email}
           </div>
 
+          {!changingEmail && (
+            <button
+              className="verify-change-email"
+              type="button"
+              onClick={() => {
+                setChangingEmail(true);
+                setEmailError("");
+                setEmailSuccess("");
+                setError("");
+                setSuccess("");
+              }}
+            >
+              Change email
+            </button>
+          )}
+
+          {changingEmail && (
+            <form
+              className="verify-change-email-form"
+              onSubmit={changeEmail}
+            >
+              <label
+                className="verify-change-email-label"
+                htmlFor="new-email"
+              >
+                New email address
+              </label>
+
+              <input
+                id="new-email"
+                className="verify-email-input"
+                type="email"
+                autoComplete="email"
+                value={newEmail}
+                onChange={
+                  handleNewEmailChange
+                }
+                placeholder="you@example.com"
+                disabled={savingEmail}
+                autoFocus
+              />
+
+              {emailError && (
+                <div
+                  className="verify-error"
+                  role="alert"
+                >
+                  {emailError}
+                </div>
+              )}
+
+              {emailSuccess && (
+                <div
+                  className="verify-success"
+                  role="status"
+                >
+                  {emailSuccess}
+                </div>
+              )}
+
+              <div className="verify-change-email-actions">
+                <button
+                  className="verify-button"
+                  type="submit"
+                  disabled={
+                    savingEmail ||
+                    !newEmail.trim()
+                  }
+                >
+                  {savingEmail
+                    ? "Changing..."
+                    : "Change email"}
+                </button>
+
+                <button
+                  className="verify-cancel"
+                  type="button"
+                  onClick={() => {
+                    setChangingEmail(false);
+                    setNewEmail("");
+                    setEmailError("");
+                    setEmailSuccess("");
+                  }}
+                  disabled={savingEmail}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+
           <form
             className="verify-form"
             onSubmit={verifyCode}
@@ -304,7 +539,7 @@ export default function VerifyPage() {
               placeholder="000000"
               aria-label="Verification code"
               disabled={loading}
-              autoFocus
+              autoFocus={!changingEmail}
             />
 
             {error && (
