@@ -12,29 +12,6 @@ import {
 
 import { countLabel } from "../lib/format";
 
-// ============================================================
-// FADES MAIL — MESSAGE HOOK
-// ============================================================
-//
-// Live mail system:
-//
-//   • Visible mailbox refreshes every 10 seconds
-//   • Inbox is ALWAYS checked independently
-//   • Works even while viewing Sent / Trash / Spam / etc.
-//   • Desktop notifications for newly detected mail
-//   • Sound notifications for newly detected mail
-//   • Existing mail is NOT notified on initial load
-//   • Duplicate notifications are prevented
-//   • Returning to the tab triggers an immediate refresh
-//
-// IMPORTANT:
-// This uses browser polling rather than WebSockets / SSE / Push.
-//
-// Browsers may throttle JavaScript timers when a tab is heavily
-// backgrounded. For guaranteed notifications while the browser
-// is closed, Web Push + a service worker would be required.
-//
-
 const LIVE_REFRESH_INTERVAL = 10 * 1000;
 
 const DESKTOP_NOTIFICATIONS_KEY =
