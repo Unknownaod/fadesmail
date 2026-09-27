@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Logo from "./Logo";
 
 const INVITE_API_URL = "https://invite-api.fades.lol";
@@ -98,7 +99,9 @@ function InviteIcon({ state }) {
   );
 }
 
-// Sign in / create account screen. `auth` comes from useAuth().
+// Sign in / create account screen.
+// auth comes from useAuth().
+
 export default function AuthScreen({ auth }) {
   const {
     authMode,
@@ -117,97 +120,173 @@ export default function AuthScreen({ auth }) {
   const isSignIn = authMode === "signin";
 
   const [inviteState, setInviteState] = useState(
-    isSignIn ? "signin" : "checking"
+    isSignIn ? "signin" : "invalid"
   );
 
   const [inviteError, setInviteError] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteChecking, setInviteChecking] = useState(false);
 
-  useEffect(() => {
-    if (isSignIn) {
-      setInviteState("signin");
-      setInviteError("");
+  // =========================================================
+  // INVITE VALIDATION
+  // =========================================================
+
+  const validateInviteCode = useCallback(async (code) => {
+    const cleanedCode = String(code || "")
+      .trim()
+      .toUpperCase();
+
+    if (!cleanedCode) {
+      setInviteState("invalid");
+      setInviteError("Please enter your invitation code.");
       return;
     }
 
-    let cancelled = false;
+    setInviteChecking(true);
+    setInviteState("checking");
+    setInviteError("");
 
-    async function validateInvite() {
-      setInviteState("checking");
-      setInviteError("");
+    try {
+      const response = await fetch(
+        `${INVITE_API_URL}/api/admin?action=validate&code=${encodeURIComponent(
+          cleanedCode
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          credentials: "omit",
+          cache: "no-store",
+        }
+      );
 
-      const params = new URLSearchParams(window.location.search);
-      const inviteCode = params.get("invite");
+      const data = await response.json().catch(() => null);
 
-      if (!inviteCode) {
-        if (!cancelled) {
-          setInviteState("invalid");
+      if (!response.ok) {
+        console.error("Invite API error:", response.status, data);
+
+        setInviteState("invalid");
+
+        if (response.status === 404) {
           setInviteError(
-            "A valid invitation link is required to create a Fades Mail account."
+            "The invitation verification endpoint was not found. Please contact Fades Mail support."
+          );
+        } else if (response.status === 401 || response.status === 403) {
+          setInviteError(
+            "The invitation server is not allowing public verification. Please contact Fades Mail support."
+          );
+        } else {
+          setInviteError(
+            data?.message ||
+              data?.error ||
+              "We couldn't verify your invitation. Please try again."
           );
         }
 
         return;
       }
 
-      try {
-        const response = await fetch(
-          `${INVITE_API_URL}/invites/validate?code=${encodeURIComponent(
-            inviteCode
-          )}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-            credentials: "omit",
-            cache: "no-store",
-          }
+      if (!data?.valid) {
+        setInviteState("invalid");
+
+        setInviteError(
+          data?.message ||
+            "This invitation is invalid, expired, or has already been used."
         );
 
-        let data = null;
-
-        try {
-          data = await response.json();
-        } catch {
-          data = null;
-        }
-
-        if (cancelled) return;
-
-        if (!response.ok || !data?.valid) {
-          setInviteState("invalid");
-
-          setInviteError(
-            data?.message ||
-              "This invitation is invalid, expired, or has already been used."
-          );
-
-          return;
-        }
-
-        setInviteState("valid");
-      } catch (error) {
-        console.error("Invite validation failed:", error);
-
-        if (!cancelled) {
-          setInviteState("invalid");
-          setInviteError(
-            "We couldn't verify your invitation right now. Please try again."
-          );
-        }
+        return;
       }
+
+      // Invitation is valid.
+      setInviteCode(cleanedCode);
+      setInviteState("valid");
+      setInviteError("");
+
+      // Keep the code in the URL so a refresh doesn't lose it.
+      const url = new URL(window.location.href);
+
+      url.searchParams.set("invite", cleanedCode);
+
+      window.history.replaceState({}, "", url.toString());
+    } catch (error) {
+      console.error("Invite validation failed:", error);
+
+      setInviteState("invalid");
+
+      setInviteError(
+        "Unable to connect to the invitation server. Please try again."
+      );
+    } finally {
+      setInviteChecking(false);
+    }
+  }, []);
+
+  // =========================================================
+  // AUTOMATICALLY CHECK INVITE LINKS
+  // =========================================================
+
+  useEffect(() => {
+    if (isSignIn) {
+      setInviteState("signin");
+      setInviteError("");
+      setInviteChecking(false);
+      return;
     }
 
-    validateInvite();
+    const params = new URLSearchParams(window.location.search);
+    const codeFromUrl = params.get("invite");
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isSignIn]);
+    if (codeFromUrl) {
+      const cleanedCode = codeFromUrl.trim().toUpperCase();
+
+      setInviteCode(cleanedCode);
+      validateInviteCode(cleanedCode);
+    } else {
+      // No invite in URL.
+      // Allow the user to manually enter one.
+      setInviteState("invalid");
+      setInviteError("");
+    }
+  }, [isSignIn, validateInviteCode]);
+
+  // =========================================================
+  // INVITE INPUT
+  // =========================================================
+
+  function handleInviteChange(event) {
+    const value = event.target.value.toUpperCase();
+
+    setInviteCode(value);
+    setInviteState("invalid");
+    setInviteError("");
+
+    // Remove the old invite from the URL if the user edits it.
+    const url = new URL(window.location.href);
+
+    url.searchParams.delete("invite");
+
+    window.history.replaceState({}, "", url.toString());
+  }
+
+  function handleInviteSubmit(event) {
+    event.preventDefault();
+
+    if (inviteChecking) return;
+
+    validateInviteCode(inviteCode);
+  }
+
+  // =========================================================
+  // SIGNUP ACCESS
+  // =========================================================
 
   const signupBlocked =
-    !isSignIn &&
-    inviteState !== "valid";
+    !isSignIn && inviteState !== "valid";
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <main className="auth-page">
@@ -232,6 +311,10 @@ export default function AuthScreen({ auth }) {
               : ""
           }`}
         >
+          {/* ================================================= */}
+          {/* SIGN IN */}
+          {/* ================================================= */}
+
           {isSignIn ? (
             <>
               <div className="auth-heading">
@@ -309,65 +392,93 @@ export default function AuthScreen({ auth }) {
             </>
           ) : (
             <>
+              {/* ============================================= */}
+              {/* SIGNUP: INVITE VERIFICATION */}
+              {/* ============================================= */}
+
               {inviteState !== "valid" ? (
                 <div className="invite-gate">
                   <InviteIcon state={inviteState} />
 
                   <div className="invite-gate-heading">
-                    {inviteState === "checking" ? (
-                      <>
-                        <div className="invite-status">
-                          Verifying invitation
-                        </div>
+                    <div className="invite-status invite-status-locked">
+                      Private access
+                    </div>
 
-                        <h1>
-                          Checking your invite...
-                        </h1>
+                    <h1>
+                      You're invited?
+                    </h1>
 
-                        <p>
-                          Give us a moment while we verify
-                          your private Fades Mail invitation.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="invite-status invite-status-locked">
-                          Private access
-                        </div>
-
-                        <h1>
-                          Invitation required.
-                        </h1>
-
-                        <p>
-                          Fades Mail is currently private.
-                          You need a valid invitation link
-                          to create a mailbox.
-                        </p>
-                      </>
-                    )}
+                    <p>
+                      Fades Mail is currently private.
+                      Enter your invitation code below
+                      to create your mailbox.
+                    </p>
                   </div>
 
-                  {inviteState === "checking" && (
+                  {/* INVITE CODE FORM */}
+
+                  <form
+                    className="invite-entry"
+                    onSubmit={handleInviteSubmit}
+                  >
+                    <label className="invite-code-label">
+                      <span>Invitation code</span>
+
+                      <input
+                        type="text"
+                        value={inviteCode}
+                        onChange={handleInviteChange}
+                        placeholder="FDS-XXXX-XXXX-XXXX"
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={22}
+                        disabled={inviteChecking}
+                        required
+                      />
+                    </label>
+
+                    {inviteError && (
+                      <div className="invite-error-card">
+                        <div className="invite-error-icon">
+                          !
+                        </div>
+
+                        <div>
+                          <strong>
+                            We couldn't accept this invitation
+                          </strong>
+
+                          <span>{inviteError}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      className="auth-submit"
+                      type="submit"
+                      disabled={
+                        inviteChecking ||
+                        !inviteCode.trim()
+                      }
+                    >
+                      <span>
+                        {inviteChecking
+                          ? "Verifying invitation..."
+                          : "Verify invitation"}
+                      </span>
+
+                      {!inviteChecking && (
+                        <span className="submit-arrow">
+                          →
+                        </span>
+                      )}
+                    </button>
+                  </form>
+
+                  {inviteChecking && (
                     <div className="invite-progress">
                       <div className="invite-progress-bar" />
-                    </div>
-                  )}
-
-                  {inviteState === "invalid" && (
-                    <div className="invite-error-card">
-                      <div className="invite-error-icon">
-                        !
-                      </div>
-
-                      <div>
-                        <strong>
-                          We couldn't accept this
-                          invitation
-                        </strong>
-
-                        <span>{inviteError}</span>
-                      </div>
                     </div>
                   )}
 
@@ -382,6 +493,10 @@ export default function AuthScreen({ auth }) {
                   </div>
                 </div>
               ) : (
+                /* =========================================== */
+                /* SIGNUP: VALID INVITE */
+                /* =========================================== */
+
                 <div className="signup-content">
                   <div className="verified-banner">
                     <div className="verified-banner-icon">
@@ -428,7 +543,22 @@ export default function AuthScreen({ auth }) {
 
                   <form
                     className="auth-form"
-                    onSubmit={submitAuth}
+                    onSubmit={(event) => {
+                      // Prevent signup if the invite is not valid.
+                      if (inviteState !== "valid") {
+                        event.preventDefault();
+                        setInviteError(
+                          "Please verify your invitation first."
+                        );
+                        return;
+                      }
+
+                      // Ensure the invitation code is available
+                      // to the signup handler.
+                      auth.inviteCode = inviteCode;
+
+                      submitAuth(event);
+                    }}
                   >
                     <label>
                       <span>Username</span>
@@ -438,9 +568,7 @@ export default function AuthScreen({ auth }) {
                           type="text"
                           value={username}
                           onChange={(event) =>
-                            setUsername(
-                              event.target.value
-                            )
+                            setUsername(event.target.value)
                           }
                           placeholder="yourname"
                           autoComplete="username"
@@ -498,7 +626,10 @@ export default function AuthScreen({ auth }) {
                     <button
                       className="auth-submit"
                       type="submit"
-                      disabled={authSubmitting}
+                      disabled={
+                        authSubmitting ||
+                        signupBlocked
+                      }
                     >
                       <span>
                         {authSubmitting
@@ -513,10 +644,38 @@ export default function AuthScreen({ auth }) {
                       )}
                     </button>
                   </form>
+
+                  <button
+                    type="button"
+                    className="invite-change-button"
+                    onClick={() => {
+                      setInviteState("invalid");
+                      setInviteError("");
+                      setInviteCode("");
+
+                      const url = new URL(
+                        window.location.href
+                      );
+
+                      url.searchParams.delete("invite");
+
+                      window.history.replaceState(
+                        {},
+                        "",
+                        url.toString()
+                      );
+                    }}
+                  >
+                    Use a different invitation code
+                  </button>
                 </div>
               )}
             </>
           )}
+
+          {/* ================================================= */}
+          {/* SIGN IN / SIGNUP SWITCH */}
+          {/* ================================================= */}
 
           <div className="auth-switch">
             <span>
