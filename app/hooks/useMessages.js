@@ -1,21 +1,57 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetch, errorFromResponse } from "../lib/api";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  apiFetch,
+  errorFromResponse,
+} from "../lib/api";
+
 import { countLabel } from "../lib/format";
+
+// ============================================================
+// FADES MAIL — MESSAGE HOOK
+// ============================================================
+//
+// Live mail:
+//   - Refreshes inbox every 10 seconds
+//   - Refreshes folder/unread counts
+//   - Immediately refreshes when returning to the tab
+//
+// Notifications:
+//   - Desktop notifications
+//   - Notification sounds
+//   - Detects newly arrived messages
+//   - Does not notify for existing mail on first load
+//   - Prevents duplicate notifications
+//
+// No WebSocket / SSE / push backend is required.
+//
+// The browser simply polls the existing Fades Mail API.
+//
+
+// ============================================================
+// CONFIG
+// ============================================================
 
 const LIVE_REFRESH_INTERVAL = 10 * 1000;
 
-// Toast wording for bulk "move to folder" actions.
-const BULK_MOVE_RESULT = {
-  spam: "moved to Spam",
-  trash: "moved to Trash",
-  archive: "archived",
-};
+const DESKTOP_NOTIFICATIONS_KEY =
+  "fades.mail.desktopNotifications";
+
+const SOUND_NOTIFICATIONS_KEY =
+  "fades.mail.soundNotifications";
+
+const NOTIFICATION_SOUND =
+  "/sounds/new-mail.mp3";
 
 // ============================================================
 // BULK HELPER
 // ============================================================
 
-// Runs one request per id in parallel; returns how many succeeded.
 async function runBulk(ids, request) {
   const results = await Promise.all(
     ids.map(async (id) => {
@@ -36,19 +72,8 @@ async function runBulk(ids, request) {
 // ============================================================
 
 /**
- * Message list for the active folder + everything you can do
- * to messages:
- *
- * - open
- * - star
- * - read / unread
- * - move
- * - spam
- * - delete
- * - bulk versions
- *
- * Also keeps the inbox live by periodically refreshing the
- * existing mail API.
+ * Message list + message actions + live mail
+ * notification system.
  */
 export function useMessages({
   mailbox,
@@ -59,13 +84,39 @@ export function useMessages({
   onUnauthorized,
 }) {
   const [messages, setMessages] = useState([]);
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [selectedMessage, setSelectedMessage] =
+    useState(null);
 
-  // Prevent automatic refreshes from overlapping.
+  const [selectedIds, setSelectedIds] =
+    useState([]);
+
+  const [messagesLoading, setMessagesLoading] =
+    useState(false);
+
+  const [actionLoading, setActionLoading] =
+    useState(false);
+
+  // ----------------------------------------------------------
+  // Refs
+  // ----------------------------------------------------------
+
+  // Prevent overlapping silent refreshes.
   const refreshInProgressRef = useRef(false);
+
+  // IDs of messages that we've already seen.
+  const seenMessageIdsRef = useRef(new Set());
+
+  // Whether we've established the initial inbox state.
+  const notificationInitializedRef =
+    useRef(false);
+
+  // Keep the latest loadFolders function available
+  // to the polling system.
+  const loadFoldersRef = useRef(loadFolders);
+
+  useEffect(() => {
+    loadFoldersRef.current = loadFolders;
+  }, [loadFolders]);
 
   const selectedCount = selectedIds.length;
 
@@ -76,6 +127,196 @@ export function useMessages({
     );
 
   // ==========================================================
+  // NOTIFICATION SETTINGS
+  // ==========================================================
+
+  function desktopNotificationsEnabled() {
+    return (
+      typeof window !== "undefined" &&
+      localStorage.getItem(
+        DESKTOP_NOTIFICATIONS_KEY
+      ) === "true"
+    );
+  }
+
+  function soundNotificationsEnabled() {
+    return (
+      typeof window !== "undefined" &&
+      localStorage.getItem(
+        SOUND_NOTIFICATIONS_KEY
+      ) === "true"
+    );
+  }
+
+  // ==========================================================
+  // PLAY NOTIFICATION SOUND
+  // ==========================================================
+
+  function playNotificationSound() {
+    if (!soundNotificationsEnabled()) {
+      return;
+    }
+
+    try {
+      const audio = new Audio(
+        NOTIFICATION_SOUND
+      );
+
+      audio.volume = 0.75;
+
+      audio.play().catch(() => {
+        // Browsers may block autoplay depending on
+        // whether the user has interacted with the page.
+      });
+    } catch {
+      // Ignore sound errors.
+    }
+  }
+
+  // ==========================================================
+  // SHOW DESKTOP NOTIFICATION
+  // ==========================================================
+
+  function showDesktopNotification(message) {
+    if (
+      !desktopNotificationsEnabled()
+    ) {
+      return;
+    }
+
+    if (
+      typeof window === "undefined" ||
+      typeof Notification === "undefined"
+    ) {
+      return;
+    }
+
+    if (
+      Notification.permission !== "granted"
+    ) {
+      return;
+    }
+
+    const sender =
+      message.sender_name ||
+      message.sender ||
+      "New email";
+
+    const subject =
+      message.subject ||
+      "You received a new email.";
+
+    try {
+      const notification =
+        new Notification(
+          sender,
+          {
+            body: subject,
+            icon: "/logo.png",
+            tag: `fades-mail-${message.id}`,
+          }
+        );
+
+      notification.onclick = () => {
+        window.focus();
+
+        notification.close();
+      };
+    } catch (error) {
+      console.error(
+        "[Fades Mail] Notification error:",
+        error
+      );
+    }
+  }
+
+  // ==========================================================
+  // NOTIFY ABOUT NEW MESSAGE
+  // ==========================================================
+
+  function notifyNewMessage(message) {
+    showDesktopNotification(message);
+    playNotificationSound();
+  }
+
+  // ==========================================================
+  // TRACK INITIAL MESSAGES
+  // ==========================================================
+
+  function establishNotificationBaseline(
+    messageList
+  ) {
+    seenMessageIdsRef.current.clear();
+
+    for (const message of messageList) {
+      if (message?.id !== undefined) {
+        seenMessageIdsRef.current.add(
+          String(message.id)
+        );
+      }
+    }
+
+    notificationInitializedRef.current = true;
+  }
+
+  // ==========================================================
+  // DETECT NEW MESSAGES
+  // ==========================================================
+
+  function detectNewMessages(messageList) {
+    if (!Array.isArray(messageList)) {
+      return;
+    }
+
+    // First request establishes the baseline.
+    //
+    // This prevents Fades Mail from notifying the user
+    // about every email they already had when opening
+    // the website.
+    if (
+      !notificationInitializedRef.current
+    ) {
+      establishNotificationBaseline(
+        messageList
+      );
+
+      return;
+    }
+
+    const newMessages = [];
+
+    for (const message of messageList) {
+      if (!message?.id) continue;
+
+      const id = String(message.id);
+
+      if (
+        !seenMessageIdsRef.current.has(id)
+      ) {
+        newMessages.push(message);
+      }
+    }
+
+    // Update the seen set.
+    for (const message of messageList) {
+      if (!message?.id) continue;
+
+      seenMessageIdsRef.current.add(
+        String(message.id)
+      );
+    }
+
+    // Notify for every genuinely new message.
+    //
+    // Usually there will only be one, but if the browser
+    // was asleep for a while and multiple messages arrived,
+    // this handles all of them.
+    for (const message of newMessages) {
+      notifyNewMessage(message);
+    }
+  }
+
+  // ==========================================================
   // LOAD MESSAGES
   // ==========================================================
 
@@ -83,10 +324,15 @@ export function useMessages({
     async (options = {}) => {
       if (!mailbox?.id) return;
 
-      const silent = options.silent === true;
+      const silent =
+        options.silent === true;
 
-      // Don't allow automatic polling requests to stack up.
-      if (silent && refreshInProgressRef.current) {
+      // Prevent automatic refresh requests from
+      // overlapping.
+      if (
+        silent &&
+        refreshInProgressRef.current
+      ) {
         return;
       }
 
@@ -97,16 +343,25 @@ export function useMessages({
       }
 
       try {
-        const params = new URLSearchParams();
+        const params =
+          new URLSearchParams();
 
         params.set(
           "mailboxId",
           String(mailbox.id)
         );
 
-        if (resolvedActiveFolder === "starred") {
-          params.set("starred", "true");
-        } else if (resolvedActiveFolder) {
+        if (
+          resolvedActiveFolder ===
+          "starred"
+        ) {
+          params.set(
+            "starred",
+            "true"
+          );
+        } else if (
+          resolvedActiveFolder
+        ) {
           params.set(
             "folder",
             resolvedActiveFolder
@@ -120,15 +375,25 @@ export function useMessages({
           );
         }
 
-        params.set("limit", "100");
-        params.set("offset", "0");
-
-        const response = await apiFetch(
-          `/mail/messages?${params.toString()}`
+        params.set(
+          "limit",
+          "100"
         );
 
+        params.set(
+          "offset",
+          "0"
+        );
+
+        const response =
+          await apiFetch(
+            `/mail/messages?${params.toString()}`
+          );
+
         if (!response.ok) {
-          if (response.status === 401) {
+          if (
+            response.status === 401
+          ) {
             onUnauthorized();
           }
 
@@ -137,19 +402,35 @@ export function useMessages({
           );
         }
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
-        setMessages(
+        const nextMessages =
           Array.isArray(data)
             ? data
-            : data.messages || []
+            : data.messages || [];
+
+        // Detect new messages BEFORE updating
+        // the visible inbox.
+        //
+        // Only run notification detection when
+        // we're looking at the inbox.
+        if (
+          resolvedActiveFolder ===
+            "inbox" ||
+          !resolvedActiveFolder
+        ) {
+          detectNewMessages(
+            nextMessages
+          );
+        }
+
+        setMessages(
+          nextMessages
         );
 
-        // Don't clear selections during silent polling.
-        //
-        // This is important because if the user has selected
-        // messages and a live refresh happens, we don't want
-        // their selections disappearing.
+        // Silent live refreshes preserve the user's
+        // current selections.
         if (!silent) {
           setSelectedIds([]);
         }
@@ -159,15 +440,16 @@ export function useMessages({
           error
         );
 
-        // Don't wipe the current inbox just because a
-        // background refresh temporarily failed.
+        // Don't destroy the visible inbox during
+        // a temporary background network failure.
         if (!silent) {
           setMessages([]);
           setSelectedIds([]);
         }
       } finally {
         if (silent) {
-          refreshInProgressRef.current = false;
+          refreshInProgressRef.current =
+            false;
         } else {
           setMessagesLoading(false);
         }
@@ -182,28 +464,28 @@ export function useMessages({
   );
 
   // ==========================================================
-  // INITIAL MESSAGE LOAD
+  // INITIAL LOAD
   // ==========================================================
 
   useEffect(() => {
     if (!mailbox) return;
 
+    // Reset notification tracking when switching
+    // mailboxes/accounts.
+    seenMessageIdsRef.current.clear();
+
+    notificationInitializedRef.current =
+      false;
+
     loadMessages();
-  }, [mailbox, loadMessages]);
+  }, [
+    mailbox,
+    loadMessages,
+  ]);
 
   // ==========================================================
-  // LIVE MAIL REFRESH
+  // LIVE MAIL POLLING
   // ==========================================================
-  //
-  // The browser periodically checks the existing API.
-  //
-  // No WebSocket.
-  // No SSE.
-  // No backend notification service.
-  //
-  // New inbound mail gets stored by the backend normally.
-  // This simply notices it on the next refresh.
-  //
 
   useEffect(() => {
     if (!mailbox?.id) return;
@@ -214,10 +496,12 @@ export function useMessages({
     async function refreshLive() {
       if (!active) return;
 
-      // Don't poll while the tab isn't visible.
+      // Don't poll hidden tabs.
       if (
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
+        typeof document !==
+          "undefined" &&
+        document.visibilityState !==
+          "visible"
       ) {
         return;
       }
@@ -226,7 +510,7 @@ export function useMessages({
         silent: true,
       });
 
-      await loadFolders();
+      await loadFoldersRef.current();
     }
 
     function startPolling() {
@@ -249,20 +533,20 @@ export function useMessages({
 
     function handleVisibilityChange() {
       if (
-        document.visibilityState === "visible"
+        document.visibilityState ===
+        "visible"
       ) {
-        // Immediately refresh when the user comes
-        // back to Fades Mail.
+        // Immediately update when the user
+        // comes back to Fades Mail.
         refreshLive();
 
         startPolling();
       } else {
-        // Stop polling while hidden.
         stopPolling();
       }
     }
 
-    // Start polling immediately.
+    // Start the live refresh timer.
     startPolling();
 
     document.addEventListener(
@@ -283,7 +567,6 @@ export function useMessages({
   }, [
     mailbox?.id,
     loadMessages,
-    loadFolders,
   ]);
 
   // ==========================================================
@@ -303,19 +586,27 @@ export function useMessages({
     setMessages([]);
     setSelectedMessage(null);
     setSelectedIds([]);
+
+    seenMessageIdsRef.current.clear();
+
+    notificationInitializedRef.current =
+      false;
   }, []);
 
   // ==========================================================
   // OPEN MESSAGE
   // ==========================================================
 
-  async function openMessage(message) {
+  async function openMessage(
+    message
+  ) {
     if (!mailbox?.id) return;
 
     try {
-      const response = await apiFetch(
-        `/mail/messages/${message.id}?mailboxId=${mailbox.id}`
-      );
+      const response =
+        await apiFetch(
+          `/mail/messages/${message.id}?mailboxId=${mailbox.id}`
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -323,7 +614,8 @@ export function useMessages({
         );
       }
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       setSelectedMessage(
         data?.message || data
@@ -335,7 +627,8 @@ export function useMessages({
           {
             method: "POST",
             json: {
-              mailboxId: mailbox.id,
+              mailboxId:
+                mailbox.id,
             },
           }
         );
@@ -360,23 +653,28 @@ export function useMessages({
   // STAR
   // ==========================================================
 
-  async function toggleStar(message) {
+  async function toggleStar(
+    message
+  ) {
     if (!mailbox?.id) return;
 
-    const endpoint = message.isStarred
-      ? "unstar"
-      : "star";
+    const endpoint =
+      message.isStarred
+        ? "unstar"
+        : "star";
 
     try {
-      const response = await apiFetch(
-        `/mail/messages/${message.id}/${endpoint}`,
-        {
-          method: "POST",
-          json: {
-            mailboxId: mailbox.id,
-          },
-        }
-      );
+      const response =
+        await apiFetch(
+          `/mail/messages/${message.id}/${endpoint}`,
+          {
+            method: "POST",
+            json: {
+              mailboxId:
+                mailbox.id,
+            },
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -392,19 +690,24 @@ export function useMessages({
           item.id === message.id
             ? {
                 ...item,
-                isStarred: nextStarred,
+                isStarred:
+                  nextStarred,
               }
             : item
         )
       );
 
       if (
-        selectedMessage?.id === message.id
+        selectedMessage?.id ===
+        message.id
       ) {
-        setSelectedMessage((current) => ({
-          ...current,
-          isStarred: nextStarred,
-        }));
+        setSelectedMessage(
+          (current) => ({
+            ...current,
+            isStarred:
+              nextStarred,
+          })
+        );
       }
 
       await loadFolders();
@@ -425,25 +728,30 @@ export function useMessages({
   // READ / UNREAD
   // ==========================================================
 
-  async function toggleRead(message) {
+  async function toggleRead(
+    message
+  ) {
     if (!mailbox?.id) return;
 
     setActionLoading(true);
 
     try {
-      const endpoint = message.isRead
-        ? "unread"
-        : "read";
+      const endpoint =
+        message.isRead
+          ? "unread"
+          : "read";
 
-      const response = await apiFetch(
-        `/mail/messages/${message.id}/${endpoint}`,
-        {
-          method: "POST",
-          json: {
-            mailboxId: mailbox.id,
-          },
-        }
-      );
+      const response =
+        await apiFetch(
+          `/mail/messages/${message.id}/${endpoint}`,
+          {
+            method: "POST",
+            json: {
+              mailboxId:
+                mailbox.id,
+            },
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -451,26 +759,32 @@ export function useMessages({
         );
       }
 
-      const nextRead = !message.isRead;
+      const nextRead =
+        !message.isRead;
 
       setMessages((current) =>
         current.map((item) =>
           item.id === message.id
             ? {
                 ...item,
-                isRead: nextRead,
+                isRead:
+                  nextRead,
               }
             : item
         )
       );
 
       if (
-        selectedMessage?.id === message.id
+        selectedMessage?.id ===
+        message.id
       ) {
-        setSelectedMessage((current) => ({
-          ...current,
-          isRead: nextRead,
-        }));
+        setSelectedMessage(
+          (current) => ({
+            ...current,
+            isRead:
+              nextRead,
+          })
+        );
       }
 
       await loadFolders();
@@ -490,7 +804,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // MOVE MESSAGE
+  // MOVE
   // ==========================================================
 
   async function moveMessage(
@@ -500,21 +814,24 @@ export function useMessages({
   ) {
     if (!mailbox?.id) return false;
 
-    const silent = options.silent || false;
+    const silent =
+      options.silent || false;
 
     setActionLoading(true);
 
     try {
-      const response = await apiFetch(
-        `/mail/messages/${message.id}/move`,
-        {
-          method: "POST",
-          json: {
-            mailboxId: mailbox.id,
-            folder,
-          },
-        }
-      );
+      const response =
+        await apiFetch(
+          `/mail/messages/${message.id}/move`,
+          {
+            method: "POST",
+            json: {
+              mailboxId:
+                mailbox.id,
+              folder,
+            },
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -526,7 +843,8 @@ export function useMessages({
       }
 
       if (
-        selectedMessage?.id === message.id
+        selectedMessage?.id ===
+        message.id
       ) {
         setSelectedMessage(null);
       }
@@ -566,17 +884,19 @@ export function useMessages({
   ) {
     if (!mailbox?.id) return false;
 
-    const silent = options.silent || false;
+    const silent =
+      options.silent || false;
 
     setActionLoading(true);
 
     try {
-      const response = await apiFetch(
-        `/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response =
+        await apiFetch(
+          `/mail/messages/${message.id}?mailboxId=${mailbox.id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -588,7 +908,8 @@ export function useMessages({
       }
 
       if (
-        selectedMessage?.id === message.id
+        selectedMessage?.id ===
+        message.id
       ) {
         setSelectedMessage(null);
       }
@@ -619,16 +940,20 @@ export function useMessages({
   }
 
   // ==========================================================
-  // TRASH BUTTON
+  // TRASH
   // ==========================================================
 
-  async function handleTrashButton(message) {
+  async function handleTrashButton(
+    message
+  ) {
     if (
-      resolvedActiveFolder === "trash"
+      resolvedActiveFolder ===
+      "trash"
     ) {
-      const confirmed = window.confirm(
-        "Permanently delete this message? This cannot be undone."
-      );
+      const confirmed =
+        window.confirm(
+          "Permanently delete this message? This cannot be undone."
+        );
 
       if (!confirmed) return;
 
@@ -656,7 +981,9 @@ export function useMessages({
   // SPAM
   // ==========================================================
 
-  async function markAsSpam(message) {
+  async function markAsSpam(
+    message
+  ) {
     if (
       await moveMessage(
         message,
@@ -669,7 +996,9 @@ export function useMessages({
     }
   }
 
-  async function markAsNotSpam(message) {
+  async function markAsNotSpam(
+    message
+  ) {
     if (
       await moveMessage(
         message,
@@ -692,9 +1021,13 @@ export function useMessages({
     setSelectedIds((current) =>
       current.includes(messageId)
         ? current.filter(
-            (id) => id !== messageId
+            (id) =>
+              id !== messageId
           )
-        : [...current, messageId]
+        : [
+            ...current,
+            messageId,
+          ]
     );
   }
 
@@ -719,7 +1052,9 @@ export function useMessages({
   // BULK MOVE
   // ==========================================================
 
-  async function bulkMove(folder) {
+  async function bulkMove(
+    folder
+  ) {
     if (
       !mailbox?.id ||
       selectedIds.length === 0
@@ -727,7 +1062,9 @@ export function useMessages({
       return;
     }
 
-    const ids = [...selectedIds];
+    const ids = [
+      ...selectedIds,
+    ];
 
     setActionLoading(true);
 
@@ -757,8 +1094,9 @@ export function useMessages({
         `${countLabel(
           successCount
         )} ${
-          BULK_MOVE_RESULT[folder] ||
-          "updated"
+          BULK_MOVE_RESULT[
+            folder
+          ] || "updated"
         }.`
       );
     } catch (error) {
@@ -777,7 +1115,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // BULK MARK READ
+  // BULK READ
   // ==========================================================
 
   async function bulkMarkRead() {
@@ -788,7 +1126,9 @@ export function useMessages({
       return;
     }
 
-    const ids = [...selectedIds];
+    const ids = [
+      ...selectedIds,
+    ];
 
     setActionLoading(true);
 
@@ -888,13 +1228,15 @@ export function useMessages({
 
   async function handleBulkTrashButton() {
     if (
-      resolvedActiveFolder === "trash"
+      resolvedActiveFolder ===
+      "trash"
     ) {
-      const confirmed = window.confirm(
-        `Permanently delete ${countLabel(
-          selectedIds.length
-        )}? This cannot be undone.`
-      );
+      const confirmed =
+        window.confirm(
+          `Permanently delete ${countLabel(
+            selectedIds.length
+          )}? This cannot be undone.`
+        );
 
       if (
         !confirmed ||
@@ -928,9 +1270,10 @@ export function useMessages({
       return;
     }
 
-    const confirmed = window.confirm(
-      "Permanently delete all messages in Trash? This cannot be undone."
-    );
+    const confirmed =
+      window.confirm(
+        "Permanently delete all messages in Trash? This cannot be undone."
+      );
 
     if (!confirmed) return;
 
@@ -944,7 +1287,7 @@ export function useMessages({
   }
 
   // ==========================================================
-  // RETURN API
+  // RETURN
   // ==========================================================
 
   return {
@@ -984,3 +1327,4 @@ export function useMessages({
     emptyTrash,
   };
 }
+
