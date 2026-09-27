@@ -12,6 +12,27 @@ import Logo from "./Logo";
 const INVITE_API_URL =
   "https://invite-api.fades.lol";
 
+/*
+ * ============================================================
+ * CLIENT-SIDE ABUSE PROTECTION
+ * ============================================================
+ *
+ * These do NOT replace the API's server-side rate limits.
+ *
+ * They simply stop accidental/repeated requests from this
+ * browser before they ever reach the API.
+ */
+
+const VALIDATE_CLIENT_COOLDOWN_MS = 2000;
+const REDEEM_CLIENT_COOLDOWN_MS = 3000;
+
+/*
+ * If the API returns a 429 with Retry-After, that value is
+ * always authoritative over these client-side values.
+ */
+
+const DEFAULT_RATE_LIMIT_SECONDS = 60;
+
 // ============================================================
 // DOODLE BACKGROUND
 // ============================================================
@@ -201,10 +222,180 @@ function InviteIcon({ state }) {
 }
 
 // ============================================================
+// RATE LIMIT HELPERS
+// ============================================================
+
+function getRetryAfterSeconds(
+  response,
+  data
+) {
+  /*
+   * Retry-After is the preferred HTTP mechanism.
+   *
+   * It can be:
+   *   - a number of seconds
+   *   - an HTTP date
+   */
+
+  const retryAfterHeader =
+    response.headers.get(
+      "Retry-After"
+    );
+
+  if (retryAfterHeader) {
+    const numeric =
+      Number(
+        retryAfterHeader
+      );
+
+    if (
+      Number.isFinite(
+        numeric
+      ) &&
+      numeric >= 0
+    ) {
+      return Math.ceil(
+        numeric
+      );
+    }
+
+    const retryDate =
+      Date.parse(
+        retryAfterHeader
+      );
+
+    if (
+      Number.isFinite(
+        retryDate
+      )
+    ) {
+      return Math.max(
+        0,
+        Math.ceil(
+          (retryDate -
+            Date.now()) /
+            1000
+        )
+      );
+    }
+  }
+
+  /*
+   * Also support JSON returned by the API.
+   */
+
+  const jsonRetry =
+    Number(
+      data?.retryAfter ??
+        data?.retry_after ??
+        data?.retryAfterSeconds ??
+        data?.retry_after_seconds
+    );
+
+  if (
+    Number.isFinite(
+      jsonRetry
+    ) &&
+    jsonRetry >= 0
+  ) {
+    return Math.ceil(
+      jsonRetry
+    );
+  }
+
+  /*
+   * Some APIs expose RateLimit-Reset.
+   */
+
+  const resetHeader =
+    response.headers.get(
+      "RateLimit-Reset"
+    );
+
+  if (resetHeader) {
+    const resetValue =
+      Number(
+        resetHeader
+      );
+
+    if (
+      Number.isFinite(
+        resetValue
+      )
+    ) {
+      /*
+       * Most implementations expose Unix seconds.
+       */
+
+      if (
+        resetValue >
+        1000000000
+      ) {
+        return Math.max(
+          0,
+          Math.ceil(
+            resetValue -
+              Date.now() /
+                1000
+          )
+        );
+      }
+
+      /*
+       * Otherwise treat it as a relative number
+       * of seconds.
+       */
+
+      if (
+        resetValue >= 0
+      ) {
+        return Math.ceil(
+          resetValue
+        );
+      }
+    }
+  }
+
+  return DEFAULT_RATE_LIMIT_SECONDS;
+}
+
+function formatRetryTime(
+  seconds
+) {
+  const value = Math.max(
+    0,
+    Math.ceil(
+      Number(seconds) || 0
+    )
+  );
+
+  if (value < 60) {
+    return `${value} second${
+      value === 1
+        ? ""
+        : "s"
+    }`;
+  }
+
+  const minutes =
+    Math.ceil(
+      value / 60
+    );
+
+  return `${minutes} minute${
+    minutes === 1
+      ? ""
+      : "s"
+  }`;
+}
+
+// ============================================================
 // AUTH SCREEN
 // ============================================================
 
-export default function AuthScreen({ auth }) {
+export default function AuthScreen({
+  auth,
+}) {
   const {
     authMode,
     username,
@@ -256,7 +447,255 @@ export default function AuthScreen({ auth }) {
   ] = useState(null);
 
   // ==========================================================
-  // REDEMPTION STATE
+  // RATE LIMIT STATE
+  // ==========================================================
+
+  const [
+    rateLimitUntil,
+    setRateLimitUntil,
+  ] = useState(0);
+
+  const [
+    rateLimitAction,
+    setRateLimitAction,
+  ] = useState("");
+
+  const [
+    rateLimitSeconds,
+    setRateLimitSeconds,
+  ] = useState(0);
+
+  /*
+   * These refs provide an additional local request lock.
+   */
+
+  const lastValidateRequestRef =
+    useRef(0);
+
+  const lastRedeemRequestRef =
+    useRef(0);
+
+  const validateRequestRef =
+    useRef(false);
+
+  const redeemRequestRef =
+    useRef(false);
+
+  // ==========================================================
+  // TOAST STATE
+  // ==========================================================
+
+  const [
+    toast,
+    setToast,
+  ] = useState(null);
+
+  const toastTimerRef =
+    useRef(null);
+
+  const showToast =
+    useCallback(
+      (
+        message,
+        type = "error",
+        duration = 6500
+      ) => {
+        if (
+          toastTimerRef.current
+        ) {
+          clearTimeout(
+            toastTimerRef.current
+          );
+        }
+
+        setToast({
+          id: Date.now(),
+          message:
+            String(
+              message || ""
+            ),
+          type,
+        });
+
+        toastTimerRef.current =
+          setTimeout(() => {
+            setToast(null);
+          }, duration);
+      },
+      []
+    );
+
+  const dismissToast =
+    useCallback(() => {
+      if (
+        toastTimerRef.current
+      ) {
+        clearTimeout(
+          toastTimerRef.current
+        );
+
+        toastTimerRef.current =
+          null;
+      }
+
+      setToast(null);
+    }, []);
+
+  // ==========================================================
+  // TOAST CLEANUP
+  // ==========================================================
+
+  useEffect(() => {
+    return () => {
+      if (
+        toastTimerRef.current
+      ) {
+        clearTimeout(
+          toastTimerRef.current
+        );
+      }
+    };
+  }, []);
+
+  // ==========================================================
+  // RATE LIMIT COUNTDOWN
+  // ==========================================================
+
+  useEffect(() => {
+    if (
+      !rateLimitUntil
+    ) {
+      setRateLimitSeconds(
+        0
+      );
+
+      return;
+    }
+
+    function updateCountdown() {
+      const remaining =
+        Math.max(
+          0,
+          Math.ceil(
+            (rateLimitUntil -
+              Date.now()) /
+              1000
+          )
+        );
+
+      setRateLimitSeconds(
+        remaining
+      );
+
+      if (
+        remaining <= 0
+      ) {
+        setRateLimitUntil(
+          0
+        );
+
+        setRateLimitAction(
+          ""
+        );
+      }
+    }
+
+    updateCountdown();
+
+    const timer =
+      setInterval(
+        updateCountdown,
+        1000
+      );
+
+    return () =>
+      clearInterval(
+        timer
+      );
+  }, [
+    rateLimitUntil,
+  ]);
+
+  // ==========================================================
+  // APPLY SERVER RATE LIMIT
+  // ==========================================================
+
+  const applyRateLimit =
+    useCallback(
+      (
+        response,
+        data,
+        action
+      ) => {
+        const seconds =
+          getRetryAfterSeconds(
+            response,
+            data
+          );
+
+        const safeSeconds =
+          Math.max(
+            1,
+            seconds
+          );
+
+        const until =
+          Date.now() +
+          safeSeconds *
+            1000;
+
+        setRateLimitUntil(
+          until
+        );
+
+        setRateLimitAction(
+          action
+        );
+
+        setRateLimitSeconds(
+          safeSeconds
+        );
+
+        const actionText =
+          action ===
+          "redeem"
+            ? "invitation redemption"
+            : "invitation verification";
+
+        const serverMessage =
+          data?.error ||
+          data?.message;
+
+        const message =
+          serverMessage
+            ? `${serverMessage} Please wait ${formatRetryTime(
+                safeSeconds
+              )} before trying again.`
+            : `Too many ${actionText} requests. Please wait ${formatRetryTime(
+                safeSeconds
+              )} before trying again.`;
+
+        showToast(
+          message,
+          "rate-limit",
+          Math.max(
+            6500,
+            safeSeconds *
+              1000
+          )
+        );
+
+        setInviteError(
+          message
+        );
+
+        return safeSeconds;
+      },
+      [showToast]
+    );
+
+  // ==========================================================
+  // INVITE REDEMPTION STATE
   // ==========================================================
 
   /*
@@ -278,79 +717,84 @@ export default function AuthScreen({ auth }) {
   // NORMALIZE INVITE DATA
   // ==========================================================
 
-  function normalizeInviteInfo(
-    invite
-  ) {
-    if (!invite) {
-      return null;
-    }
+  const normalizeInviteInfo =
+    useCallback(
+      (
+        invite,
+        fallbackCode = ""
+      ) => {
+        if (!invite) {
+          return null;
+        }
 
-    const maxUses =
-      Number(
-        invite.maxUses ??
-          invite.max_uses ??
-          1
-      );
-
-    const useCount =
-      Number(
-        invite.useCount ??
-          invite.use_count ??
-          0
-      );
-
-    const explicitRemaining =
-      invite.remainingUses ??
-      invite.remaining_uses;
-
-    const remainingUses =
-      explicitRemaining !==
-      undefined
-        ? Number(
-            explicitRemaining
-          )
-        : Math.max(
-            0,
-            maxUses -
-              useCount
+        const maxUses =
+          Number(
+            invite.maxUses ??
+              invite.max_uses ??
+              1
           );
 
-    return {
-      code:
-        invite.code ||
-        inviteCode,
+        const useCount =
+          Number(
+            invite.useCount ??
+              invite.use_count ??
+              0
+          );
 
-      maxUses:
-        Number.isFinite(
-          maxUses
-        )
-          ? maxUses
-          : 1,
+        const explicitRemaining =
+          invite.remainingUses ??
+          invite.remaining_uses;
 
-      useCount:
-        Number.isFinite(
-          useCount
-        )
-          ? useCount
-          : 0,
+        const remainingUses =
+          explicitRemaining !==
+          undefined
+            ? Number(
+                explicitRemaining
+              )
+            : Math.max(
+                0,
+                maxUses -
+                  useCount
+              );
 
-      remainingUses:
-        Number.isFinite(
-          remainingUses
-        )
-          ? remainingUses
-          : Math.max(
-              0,
-              maxUses -
-                useCount
-            ),
+        return {
+          code:
+            invite.code ||
+            fallbackCode,
 
-      expiresAt:
-        invite.expiresAt ??
-        invite.expires_at ??
-        null,
-    };
-  }
+          maxUses:
+            Number.isFinite(
+              maxUses
+            )
+              ? maxUses
+              : 1,
+
+          useCount:
+            Number.isFinite(
+              useCount
+            )
+              ? useCount
+              : 0,
+
+          remainingUses:
+            Number.isFinite(
+              remainingUses
+            )
+              ? remainingUses
+              : Math.max(
+                  0,
+                  maxUses -
+                    useCount
+                ),
+
+          expiresAt:
+            invite.expiresAt ??
+            invite.expires_at ??
+            null,
+        };
+      },
+      []
+    );
 
   // ==========================================================
   // INVITE VALIDATION
@@ -378,8 +822,104 @@ export default function AuthScreen({ auth }) {
           return false;
         }
 
-        setInviteChecking(true);
-        setInviteState("checking");
+        /*
+         * Server rate-limit cooldown.
+         */
+
+        if (
+          rateLimitUntil &&
+          Date.now() <
+            rateLimitUntil
+        ) {
+          const remaining =
+            Math.max(
+              1,
+              Math.ceil(
+                (rateLimitUntil -
+                  Date.now()) /
+                  1000
+              )
+            );
+
+          const message = `Too many requests. Please wait ${formatRetryTime(
+            remaining
+          )} before verifying another invitation.`;
+
+          setInviteError(
+            message
+          );
+
+          showToast(
+            message,
+            "rate-limit"
+          );
+
+          return false;
+        }
+
+        /*
+         * Local request lock.
+         */
+
+        if (
+          validateRequestRef.current
+        ) {
+          return false;
+        }
+
+        /*
+         * Small browser-side cooldown between verification
+         * requests. This is deliberately much shorter than
+         * the server rate limit.
+         */
+
+        const now =
+          Date.now();
+
+        if (
+          now -
+            lastValidateRequestRef.current <
+          VALIDATE_CLIENT_COOLDOWN_MS
+        ) {
+          const remaining =
+            Math.ceil(
+              (
+                VALIDATE_CLIENT_COOLDOWN_MS -
+                (now -
+                  lastValidateRequestRef.current)
+              ) / 1000
+            );
+
+          const message =
+            "Please wait a moment before verifying the invitation again.";
+
+          setInviteError(
+            message
+          );
+
+          showToast(
+            message,
+            "warning",
+            3000
+          );
+
+          return false;
+        }
+
+        lastValidateRequestRef.current =
+          now;
+
+        validateRequestRef.current =
+          true;
+
+        setInviteChecking(
+          true
+        );
+
+        setInviteState(
+          "checking"
+        );
+
         setInviteError("");
 
         try {
@@ -393,6 +933,8 @@ export default function AuthScreen({ auth }) {
                 headers: {
                   Accept:
                     "application/json",
+                  "Cache-Control":
+                    "no-cache",
                 },
                 credentials: "omit",
                 cache: "no-store",
@@ -406,6 +948,33 @@ export default function AuthScreen({ auth }) {
                 () => null
               );
 
+          /*
+           * ==================================================
+           * RATE LIMITED
+           * ==================================================
+           */
+
+          if (
+            response.status ===
+            429
+          ) {
+            applyRateLimit(
+              response,
+              data,
+              "validate"
+            );
+
+            setInviteState(
+              "invalid"
+            );
+
+            setInviteInfo(
+              null
+            );
+
+            return false;
+          }
+
           if (!response.ok) {
             console.error(
               "Invite API error:",
@@ -417,7 +986,9 @@ export default function AuthScreen({ auth }) {
               "invalid"
             );
 
-            setInviteInfo(null);
+            setInviteInfo(
+              null
+            );
 
             if (
               response.status ===
@@ -446,12 +1017,16 @@ export default function AuthScreen({ auth }) {
             return false;
           }
 
-          if (!data?.valid) {
+          if (
+            !data?.valid
+          ) {
             setInviteState(
               "invalid"
             );
 
-            setInviteInfo(null);
+            setInviteInfo(
+              null
+            );
 
             setInviteError(
               data?.message ||
@@ -467,7 +1042,8 @@ export default function AuthScreen({ auth }) {
 
           const normalizedInvite =
             normalizeInviteInfo(
-              data.invite
+              data.invite,
+              cleanedCode
             );
 
           setInviteCode(
@@ -504,6 +1080,12 @@ export default function AuthScreen({ auth }) {
             url.toString()
           );
 
+          showToast(
+            "Invitation verified successfully.",
+            "success",
+            3500
+          );
+
           return true;
         } catch (error) {
           console.error(
@@ -515,7 +1097,9 @@ export default function AuthScreen({ auth }) {
             "invalid"
           );
 
-          setInviteInfo(null);
+          setInviteInfo(
+            null
+          );
 
           setInviteError(
             "Unable to connect to the invitation server. Please try again."
@@ -523,12 +1107,20 @@ export default function AuthScreen({ auth }) {
 
           return false;
         } finally {
+          validateRequestRef.current =
+            false;
+
           setInviteChecking(
             false
           );
         }
       },
-      [inviteCode]
+      [
+        rateLimitUntil,
+        applyRateLimit,
+        normalizeInviteInfo,
+        showToast,
+      ]
     );
 
   // ==========================================================
@@ -565,6 +1157,53 @@ export default function AuthScreen({ auth }) {
           };
         }
 
+        /*
+         * Prevent duplicate redemption requests.
+         */
+
+        if (
+          redeemRequestRef.current
+        ) {
+          return {
+            success: false,
+            error:
+              "The invitation redemption request is already being processed.",
+          };
+        }
+
+        /*
+         * Client-side cooldown.
+         */
+
+        const now =
+          Date.now();
+
+        if (
+          now -
+            lastRedeemRequestRef.current <
+          REDEEM_CLIENT_COOLDOWN_MS
+        ) {
+          const message =
+            "Please wait a moment before trying to redeem the invitation again.";
+
+          showToast(
+            message,
+            "warning",
+            3000
+          );
+
+          return {
+            success: false,
+            error: message,
+          };
+        }
+
+        lastRedeemRequestRef.current =
+          now;
+
+        redeemRequestRef.current =
+          true;
+
         try {
           const response =
             await fetch(
@@ -595,6 +1234,37 @@ export default function AuthScreen({ auth }) {
                 () => null
               );
 
+          /*
+           * ==================================================
+           * RATE LIMITED
+           * ==================================================
+           */
+
+          if (
+            response.status ===
+            429
+          ) {
+            const seconds =
+              applyRateLimit(
+                response,
+                data,
+                "redeem"
+              );
+
+            return {
+              success: false,
+              rateLimited: true,
+              retryAfter:
+                seconds,
+              error:
+                data?.error ||
+                data?.message ||
+                `Too many redemption requests. Please wait ${formatRetryTime(
+                  seconds
+                )}.`,
+            };
+          }
+
           if (
             !response.ok ||
             !data?.success
@@ -624,14 +1294,23 @@ export default function AuthScreen({ auth }) {
 
           const updatedInvite =
             normalizeInviteInfo(
-              data.invite
+              data.invite,
+              cleanedCode
             );
 
-          if (updatedInvite) {
+          if (
+            updatedInvite
+          ) {
             setInviteInfo(
               updatedInvite
             );
           }
+
+          showToast(
+            "Invitation redeemed successfully.",
+            "success",
+            3500
+          );
 
           return {
             success: true,
@@ -650,9 +1329,16 @@ export default function AuthScreen({ auth }) {
             error:
               "We couldn't connect to the invitation server to complete your invitation.",
           };
+        } finally {
+          redeemRequestRef.current =
+            false;
         }
       },
-      [normalizeInviteInfo]
+      [
+        applyRateLimit,
+        normalizeInviteInfo,
+        showToast,
+      ]
     );
 
   // ==========================================================
@@ -760,7 +1446,40 @@ export default function AuthScreen({ auth }) {
   ) {
     event.preventDefault();
 
-    if (inviteChecking) {
+    if (
+      inviteChecking
+    ) {
+      return;
+    }
+
+    if (
+      rateLimitUntil &&
+      Date.now() <
+        rateLimitUntil
+    ) {
+      const remaining =
+        Math.max(
+          1,
+          Math.ceil(
+            (rateLimitUntil -
+              Date.now()) /
+              1000
+          )
+        );
+
+      const message = `Too many requests. Please wait ${formatRetryTime(
+        remaining
+      )}.`;
+
+      setInviteError(
+        message
+      );
+
+      showToast(
+        message,
+        "rate-limit"
+      );
+
       return;
     }
 
@@ -834,6 +1553,12 @@ export default function AuthScreen({ auth }) {
         "Please verify your invitation first."
       );
 
+      showToast(
+        "Please verify your invitation first.",
+        "warning",
+        3500
+      );
+
       return;
     }
 
@@ -853,6 +1578,12 @@ export default function AuthScreen({ auth }) {
         "Your invitation code is missing. Please verify your invitation again."
       );
 
+      showToast(
+        "Your invitation code is missing. Please verify it again.",
+        "warning",
+        4000
+      );
+
       return;
     }
 
@@ -863,12 +1594,6 @@ export default function AuthScreen({ auth }) {
 
     auth.inviteCode =
       cleanedCode;
-
-    /*
-     * Tell the auth system which invitation is being
-     * used. This is useful if your submitAuth implementation
-     * already supports inviteCode.
-     */
 
     if (
       typeof auth.setInviteCode ===
@@ -884,12 +1609,8 @@ export default function AuthScreen({ auth }) {
 
     try {
       /*
-       * IMPORTANT:
-       *
        * submitAuth should return after the account creation
        * request has completed.
-       *
-       * The invite is redeemed only AFTER submitAuth succeeds.
        */
 
       const result =
@@ -910,12 +1631,6 @@ export default function AuthScreen({ auth }) {
 
         return;
       }
-
-      /*
-       * Give the authentication request a moment to finish
-       * updating its own state if it returns without a
-       * structured result.
-       */
 
       await new Promise(
         (resolve) =>
@@ -939,8 +1654,6 @@ export default function AuthScreen({ auth }) {
 
       /*
        * REDEEM THE INVITE.
-       *
-       * This is the piece that was missing from the old file.
        */
 
       const redemption =
@@ -957,13 +1670,22 @@ export default function AuthScreen({ auth }) {
         );
 
         /*
-         * We intentionally do not pretend the invite was
-         * redeemed if the API rejected it.
-         *
-         * The account has already been created at this point,
-         * so this should also be logged server-side in a
-         * production system.
+         * If the API rate-limited redemption, make the
+         * problem extremely obvious to the user.
          */
+
+        if (
+          redemption.rateLimited
+        ) {
+          return;
+        }
+
+        showToast(
+          redemption.error ||
+            "Your account was created, but the invitation could not be redeemed. Please contact Fades Mail support.",
+          "error",
+          8000
+        );
 
         return;
       }
@@ -988,595 +1710,901 @@ export default function AuthScreen({ auth }) {
   // ==========================================================
 
   return (
-    <main className="auth-page">
-      {/* Same background for BOTH sign-in and signup */}
+    <>
+      {/* ====================================================== */}
+      {/* GLOBAL RATE-LIMIT TOAST */}
+      {/* ====================================================== */}
 
-      <DoodleBackground />
-
-      <div className="auth-shell">
-        {/* ================================================== */}
-        {/* BRAND */}
-        {/* ================================================== */}
-
-        <div className="auth-brand">
-          <Logo size={40} />
-
-          <div>
-            <strong>
-              Fades Mail
-            </strong>
-
-            <span>
-              Private email, beautifully simple.
-            </span>
-          </div>
-        </div>
-
-        {/* ================================================== */}
-        {/* CARD */}
-        {/* ================================================== */}
-
+      {toast && (
         <div
-          className={`auth-card ${
-            !isSignIn
-              ? "auth-card-invite"
-              : "auth-card-signin"
-          } ${
-            inviteState ===
-            "valid"
-              ? "auth-card-verified"
-              : ""
-          }`}
+          className={`fades-auth-toast fades-auth-toast-${toast.type}`}
+          role="alert"
+          aria-live="assertive"
+          style={{
+            position:
+              "fixed",
+            top:
+              "20px",
+            right:
+              "20px",
+            zIndex:
+              999999,
+            width:
+              "min(440px, calc(100vw - 32px))",
+            maxWidth:
+              "calc(100vw - 32px)",
+            pointerEvents:
+              "auto",
+          }}
         >
-          {/* ================================================= */}
-          {/* SIGN IN */}
-          {/* ================================================= */}
+          <div
+            className="fades-auth-toast-inner"
+            style={{
+              display:
+                "flex",
+              alignItems:
+                "flex-start",
+              gap:
+                "12px",
+              width:
+                "100%",
+              boxSizing:
+                "border-box",
+              padding:
+                "14px 15px",
+              borderRadius:
+                "14px",
+              background:
+                "rgba(20, 20, 20, 0.97)",
+              color:
+                "#fff",
+              border:
+                "1px solid rgba(255,255,255,0.12)",
+              boxShadow:
+                "0 18px 50px rgba(0,0,0,0.25)",
+              backdropFilter:
+                "blur(18px)",
+              WebkitBackdropFilter:
+                "blur(18px)",
+            }}
+          >
+            <div
+              style={{
+                flex:
+                  "0 0 auto",
+                width:
+                  "28px",
+                height:
+                  "28px",
+                display:
+                  "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
+                borderRadius:
+                  "9px",
+                background:
+                  toast.type ===
+                  "success"
+                    ? "rgba(80, 200, 120, 0.16)"
+                    : toast.type ===
+                      "warning"
+                    ? "rgba(255, 190, 70, 0.16)"
+                    : toast.type ===
+                      "rate-limit"
+                    ? "rgba(255, 170, 60, 0.16)"
+                    : "rgba(255, 80, 80, 0.16)",
+                color:
+                  toast.type ===
+                  "success"
+                    ? "#65d68a"
+                    : toast.type ===
+                      "warning"
+                    ? "#ffca63"
+                    : toast.type ===
+                      "rate-limit"
+                    ? "#ffb84d"
+                    : "#ff7777",
+                fontWeight:
+                  800,
+                fontSize:
+                  "14px",
+              }}
+            >
+              {toast.type ===
+              "success"
+                ? "✓"
+                : toast.type ===
+                  "rate-limit"
+                ? "⏱"
+                : "!"}
+            </div>
 
-          {isSignIn ? (
-            <>
-              <div className="auth-heading">
-                <div className="auth-heading-badge">
-                  Welcome back
-                </div>
-
-                <h1>
-                  Welcome back.
-                </h1>
-
-                <p>
-                  Sign in to continue
-                  to your Fades Mail
-                  account.
-                </p>
+            <div
+              style={{
+                flex:
+                  "1 1 auto",
+                minWidth:
+                  0,
+                paddingTop:
+                  "2px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize:
+                    "13px",
+                  fontWeight:
+                    700,
+                  lineHeight:
+                    1.35,
+                  marginBottom:
+                    "3px",
+                }}
+              >
+                {toast.type ===
+                "rate-limit"
+                  ? "Too many requests"
+                  : toast.type ===
+                    "success"
+                  ? "Success"
+                  : "Fades Mail"}
               </div>
 
-              <form
-                className="auth-form"
-                onSubmit={
-                  submitAuth
-                }
+              <div
+                style={{
+                  fontSize:
+                    "13px",
+                  lineHeight:
+                    1.5,
+                  color:
+                    "rgba(255,255,255,0.78)",
+                  overflowWrap:
+                    "anywhere",
+                  wordBreak:
+                    "break-word",
+                  whiteSpace:
+                    "normal",
+                }}
               >
-                {/* EMAIL */}
+                {
+                  toast.message
+                }
+              </div>
+            </div>
 
-                <label>
-                  <span>
-                    Email
-                  </span>
+            <button
+              type="button"
+              onClick={
+                dismissToast
+              }
+              aria-label="Dismiss notification"
+              style={{
+                flex:
+                  "0 0 auto",
+                width:
+                  "28px",
+                height:
+                  "28px",
+                border:
+                  0,
+                padding:
+                  0,
+                margin:
+                  0,
+                borderRadius:
+                  "8px",
+                background:
+                  "rgba(255,255,255,0.07)",
+                color:
+                  "rgba(255,255,255,0.65)",
+                cursor:
+                  "pointer",
+                fontSize:
+                  "17px",
+                lineHeight:
+                  1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
-                  <input
-                    type="email"
-                    value={
-                      email
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setEmail(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    autoFocus
-                    required
-                  />
-                </label>
+      <main className="auth-page">
+        {/* Same background for BOTH sign-in and signup */}
 
-                {/* PASSWORD */}
+        <DoodleBackground />
 
-                <label>
-                  <span>
-                    Password
-                  </span>
+        <div className="auth-shell">
+          {/* ================================================== */}
+          {/* BRAND */}
+          {/* ================================================== */}
 
-                  <input
-                    type="password"
-                    value={
-                      password
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setPassword(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    placeholder="Your password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </label>
+          <div className="auth-brand">
+            <Logo size={40} />
 
-                {/* ERROR */}
+            <div>
+              <strong>
+                Fades Mail
+              </strong>
 
-                {authError && (
-                  <div className="auth-error">
-                    <span>
-                      !
-                    </span>
+              <span>
+                Private email, beautifully simple.
+              </span>
+            </div>
+          </div>
 
-                    <span>
-                      {
-                        authError
-                      }
-                    </span>
+          {/* ================================================== */}
+          {/* CARD */}
+          {/* ================================================== */}
+
+          <div
+            className={`auth-card ${
+              !isSignIn
+                ? "auth-card-invite"
+                : "auth-card-signin"
+            } ${
+              inviteState ===
+              "valid"
+                ? "auth-card-verified"
+                : ""
+            }`}
+          >
+            {/* ================================================= */}
+            {/* SIGN IN */}
+            {/* ================================================= */}
+
+            {isSignIn ? (
+              <>
+                <div className="auth-heading">
+                  <div className="auth-heading-badge">
+                    Welcome back
                   </div>
-                )}
 
-                {/* SUBMIT */}
+                  <h1>
+                    Welcome back.
+                  </h1>
 
-                <button
-                  className="auth-submit"
-                  type="submit"
-                  disabled={
-                    authSubmitting
+                  <p>
+                    Sign in to continue
+                    to your Fades Mail
+                    account.
+                  </p>
+                </div>
+
+                <form
+                  className="auth-form"
+                  onSubmit={
+                    submitAuth
                   }
                 >
-                  <span>
-                    {authSubmitting
-                      ? "Signing in..."
-                      : "Sign in"}
-                  </span>
+                  {/* EMAIL */}
 
-                  {!authSubmitting && (
-                    <span className="submit-arrow">
-                      →
+                  <label>
+                    <span>
+                      Email
                     </span>
-                  )}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              {/* ================================================= */}
-              {/* SIGNUP — INVITE GATE */}
-              {/* ================================================= */}
 
-              {inviteState !==
-              "valid" ? (
-                <div className="invite-gate">
-                  <InviteIcon
-                    state={
-                      inviteState
-                    }
-                  />
+                    <input
+                      type="email"
+                      value={
+                        email
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setEmail(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      autoFocus
+                      required
+                    />
+                  </label>
 
-                  <div className="invite-gate-heading">
-                    <div className="invite-status invite-status-locked">
-                      Private access
-                    </div>
+                  {/* PASSWORD */}
 
-                    <h1>
-                      You're invited?
-                    </h1>
+                  <label>
+                    <span>
+                      Password
+                    </span>
 
-                    <p>
-                      Fades Mail is
-                      currently
-                      private. Enter
-                      your invitation
-                      code below to
-                      create your
-                      mailbox.
-                    </p>
-                  </div>
+                    <input
+                      type="password"
+                      value={
+                        password
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setPassword(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </label>
 
-                  {/* INVITE FORM */}
+                  {/* ERROR */}
 
-                  <form
-                    className="invite-entry"
-                    onSubmit={
-                      handleInviteSubmit
-                    }
-                  >
-                    <label className="invite-code-label">
+                  {authError && (
+                    <div className="auth-error">
                       <span>
-                        Invitation
-                        code
+                        !
                       </span>
 
-                      <input
-                        type="text"
-                        value={
-                          inviteCode
+                      <span>
+                        {
+                          authError
                         }
-                        onChange={
-                          handleInviteChange
-                        }
-                        placeholder="FDS-XXXX-XXXX-XXXX"
-                        autoComplete="off"
-                        spellCheck={
-                          false
-                        }
-                        maxLength={
-                          22
-                        }
-                        disabled={
-                          inviteChecking
-                        }
-                        required
-                      />
-                    </label>
+                      </span>
+                    </div>
+                  )}
 
-                    {inviteError && (
-                      <div className="invite-error-card">
-                        <div className="invite-error-icon">
-                          !
+                  {/* SUBMIT */}
+
+                  <button
+                    className="auth-submit"
+                    type="submit"
+                    disabled={
+                      authSubmitting
+                    }
+                  >
+                    <span>
+                      {authSubmitting
+                        ? "Signing in..."
+                        : "Sign in"}
+                    </span>
+
+                    {!authSubmitting && (
+                      <span className="submit-arrow">
+                        →
+                      </span>
+                    )}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                {/* ================================================= */}
+                {/* SIGNUP — INVITE GATE */}
+                {/* ================================================= */}
+
+                {inviteState !==
+                "valid" ? (
+                  <div className="invite-gate">
+                    <InviteIcon
+                      state={
+                        inviteState
+                      }
+                    />
+
+                    <div className="invite-gate-heading">
+                      <div className="invite-status invite-status-locked">
+                        Private access
+                      </div>
+
+                      <h1>
+                        You're invited?
+                      </h1>
+
+                      <p>
+                        Fades Mail is
+                        currently
+                        private. Enter
+                        your invitation
+                        code below to
+                        create your
+                        mailbox.
+                      </p>
+                    </div>
+
+                    {/* INVITE FORM */}
+
+                    <form
+                      className="invite-entry"
+                      onSubmit={
+                        handleInviteSubmit
+                      }
+                    >
+                      <label className="invite-code-label">
+                        <span>
+                          Invitation
+                          code
+                        </span>
+
+                        <input
+                          type="text"
+                          value={
+                            inviteCode
+                          }
+                          onChange={
+                            handleInviteChange
+                          }
+                          placeholder="FDS-XXXX-XXXX-XXXX"
+                          autoComplete="off"
+                          spellCheck={
+                            false
+                          }
+                          maxLength={
+                            22
+                          }
+                          disabled={
+                            inviteChecking ||
+                            Boolean(
+                              rateLimitUntil &&
+                                Date.now() <
+                                  rateLimitUntil
+                            )
+                          }
+                          required
+                        />
+                      </label>
+
+                      {inviteError && (
+                        <div className="invite-error-card">
+                          <div className="invite-error-icon">
+                            !
+                          </div>
+
+                          <div>
+                            <strong>
+                              We couldn't accept this invitation
+                            </strong>
+
+                            <span>
+                              {
+                                inviteError
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* RATE LIMIT STATUS */}
+
+                      {rateLimitSeconds >
+                        0 && (
+                        <div
+                          className="invite-rate-limit-card"
+                          style={{
+                            display:
+                              "flex",
+                            alignItems:
+                              "flex-start",
+                            gap:
+                              "10px",
+                            marginTop:
+                              "10px",
+                            padding:
+                              "11px 12px",
+                            borderRadius:
+                              "12px",
+                            background:
+                              "rgba(255, 170, 60, 0.08)",
+                            border:
+                              "1px solid rgba(255, 170, 60, 0.18)",
+                            color:
+                              "inherit",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize:
+                                "16px",
+                              lineHeight:
+                                1.2,
+                              flex:
+                                "0 0 auto",
+                            }}
+                          >
+                            ⏱
+                          </span>
+
+                          <div
+                            style={{
+                              minWidth:
+                                0,
+                            }}
+                          >
+                            <strong
+                              style={{
+                                display:
+                                  "block",
+                                fontSize:
+                                  "12px",
+                                marginBottom:
+                                  "2px",
+                              }}
+                            >
+                              Verification temporarily limited
+                            </strong>
+
+                            <span
+                              style={{
+                                display:
+                                  "block",
+                                fontSize:
+                                  "12px",
+                                lineHeight:
+                                  1.45,
+                                opacity:
+                                  0.72,
+                              }}
+                            >
+                              Too many requests were detected. Try again in{" "}
+                              <strong>
+                                {
+                                  formatRetryTime(
+                                    rateLimitSeconds
+                                  )
+                                }
+                              </strong>
+                              .
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        className="auth-submit"
+                        type="submit"
+                        disabled={
+                          inviteChecking ||
+                          !inviteCode.trim() ||
+                          Boolean(
+                            rateLimitUntil &&
+                              Date.now() <
+                                rateLimitUntil
+                          )
+                        }
+                      >
+                        <span>
+                          {inviteChecking
+                            ? "Verifying invitation..."
+                            : rateLimitSeconds >
+                              0
+                            ? `Try again in ${formatRetryTime(
+                                rateLimitSeconds
+                              )}`
+                            : "Verify invitation"}
+                        </span>
+
+                        {!inviteChecking &&
+                          rateLimitSeconds <=
+                            0 && (
+                            <span className="submit-arrow">
+                              →
+                            </span>
+                          )}
+                      </button>
+                    </form>
+
+                    {inviteChecking && (
+                      <div className="invite-progress">
+                        <div className="invite-progress-bar" />
+                      </div>
+                    )}
+
+                    <div className="invite-private-note">
+                      <span className="invite-private-lock">
+                        🔒
+                      </span>
+
+                      <span>
+                        Fades Mail is
+                        invite-only by
+                        design.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* =============================================== */
+                  /* SIGNUP — VERIFIED */
+                  /* =============================================== */
+
+                  <div className="signup-content">
+                    <div className="verified-banner">
+                      <div className="verified-banner-icon">
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M5 12.5l4.2 4.2L19 7"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+
+                      <div>
+                        <strong>
+                          Invitation verified
+                        </strong>
+
+                        <span>
+                          You're invited
+                          to Fades Mail.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ================================================= */}
+                    {/* INVITE USAGE */}
+                    {/* ================================================= */}
+
+                    {inviteInfo && (
+                      <div className="invite-usage-card">
+                        <div>
+                          <span>
+                            Invitation
+                            usage
+                          </span>
+
+                          <strong>
+                            {
+                              inviteInfo.useCount
+                            }{" "}
+                            /{" "}
+                            {
+                              inviteInfo.maxUses
+                            }
+                          </strong>
                         </div>
 
                         <div>
-                          <strong>
-                            We couldn't accept this invitation
-                          </strong>
-
                           <span>
-                            {
-                              inviteError
-                            }
+                            Remaining
                           </span>
+
+                          <strong>
+                            {
+                              inviteInfo.remainingUses
+                            }
+                          </strong>
                         </div>
                       </div>
                     )}
 
-                    <button
-                      className="auth-submit"
-                      type="submit"
-                      disabled={
-                        inviteChecking ||
-                        !inviteCode.trim()
+                    <div className="auth-heading">
+                      <div className="auth-heading-badge">
+                        Private mailbox
+                      </div>
+
+                      <h1>
+                        Create your
+                        mailbox.
+                      </h1>
+
+                      <p>
+                        Choose your
+                        Fades Mail
+                        address and
+                        create your
+                        account.
+                      </p>
+                    </div>
+
+                    <form
+                      className="auth-form"
+                      onSubmit={
+                        handleSignupSubmit
                       }
                     >
-                      <span>
-                        {inviteChecking
-                          ? "Verifying invitation..."
-                          : "Verify invitation"}
-                      </span>
+                      {/* USERNAME */}
 
-                      {!inviteChecking && (
-                        <span className="submit-arrow">
-                          →
-                        </span>
-                      )}
-                    </button>
-                  </form>
-
-                  {inviteChecking && (
-                    <div className="invite-progress">
-                      <div className="invite-progress-bar" />
-                    </div>
-                  )}
-
-                  <div className="invite-private-note">
-                    <span className="invite-private-lock">
-                      🔒
-                    </span>
-
-                    <span>
-                      Fades Mail is
-                      invite-only by
-                      design.
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                /* =============================================== */
-                /* SIGNUP — VERIFIED */
-                /* =============================================== */
-
-                <div className="signup-content">
-                  <div className="verified-banner">
-                    <div className="verified-banner-icon">
-                      <svg
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M5 12.5l4.2 4.2L19 7"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </div>
-
-                    <div>
-                      <strong>
-                        Invitation verified
-                      </strong>
-
-                      <span>
-                        You're invited
-                        to Fades Mail.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* ================================================= */}
-                  {/* INVITE USAGE */}
-                  {/* ================================================= */}
-
-                  {inviteInfo && (
-                    <div className="invite-usage-card">
-                      <div>
+                      <label>
                         <span>
-                          Invitation
-                          usage
+                          Username
                         </span>
 
-                        <strong>
-                          {
-                            inviteInfo.useCount
-                          }{" "}
-                          /{" "}
-                          {
-                            inviteInfo.maxUses
-                          }
-                        </strong>
-                      </div>
+                        <div className="input-shell">
+                          <input
+                            type="text"
+                            value={
+                              username
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setUsername(
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            placeholder="yourname"
+                            autoComplete="username"
+                            required
+                          />
 
-                      <div>
+                          <small>
+                            @fades.lol
+                          </small>
+                        </div>
+
+                        <em>
+                          Your new
+                          address will{" "}
+                          {username
+                            ? `${String(
+                                username
+                              ).toLowerCase()}@fades.lol`
+                            : "yourname@fades.lol"}
+                        </em>
+                      </label>
+
+                      {/* EMAIL */}
+
+                      <label>
                         <span>
-                          Remaining
+                          Email
                         </span>
 
-                        <strong>
-                          {
-                            inviteInfo.remainingUses
-                          }
-                        </strong>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="auth-heading">
-                    <div className="auth-heading-badge">
-                      Private mailbox
-                    </div>
-
-                    <h1>
-                      Create your
-                      mailbox.
-                    </h1>
-
-                    <p>
-                      Choose your
-                      Fades Mail
-                      address and
-                      create your
-                      account.
-                    </p>
-                  </div>
-
-                  <form
-                    className="auth-form"
-                    onSubmit={
-                      handleSignupSubmit
-                    }
-                  >
-                    {/* USERNAME */}
-
-                    <label>
-                      <span>
-                        Username
-                      </span>
-
-                      <div className="input-shell">
                         <input
-                          type="text"
+                          type="email"
                           value={
-                            username
+                            email
                           }
                           onChange={(
                             event
                           ) =>
-                            setUsername(
+                            setEmail(
                               event
                                 .target
                                 .value
                             )
                           }
-                          placeholder="yourname"
-                          autoComplete="username"
+                          placeholder="you@example.com"
+                          autoComplete="email"
                           required
                         />
+                      </label>
 
-                        <small>
-                          @fades.lol
-                        </small>
-                      </div>
+                      {/* PASSWORD */}
 
-                      <em>
-                        Your new
-                        address will{" "}
-                        {username
-                          ? `${String(
-                              username
-                            ).toLowerCase()}@fades.lol`
-                          : "yourname@fades.lol"}
-                      </em>
-                    </label>
-
-                    {/* EMAIL */}
-
-                    <label>
-                      <span>
-                        Email
-                      </span>
-
-                      <input
-                        type="email"
-                        value={
-                          email
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setEmail(
-                            event
-                              .target
-                              .value
-                          )
-                        }
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                        required
-                      />
-                    </label>
-
-                    {/* PASSWORD */}
-
-                    <label>
-                      <span>
-                        Password
-                      </span>
-
-                      <input
-                        type="password"
-                        value={
-                          password
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setPassword(
-                            event
-                              .target
-                              .value
-                          )
-                        }
-                        placeholder="Your password"
-                        autoComplete="new-password"
-                        required
-                      />
-                    </label>
-
-                    {/* AUTH ERROR */}
-
-                    {authError && (
-                      <div className="auth-error">
+                      <label>
                         <span>
-                          !
+                          Password
                         </span>
 
-                        <span>
-                          {
-                            authError
+                        <input
+                          type="password"
+                          value={
+                            password
                           }
-                        </span>
-                      </div>
-                    )}
+                          onChange={(
+                            event
+                          ) =>
+                            setPassword(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          placeholder="Your password"
+                          autoComplete="new-password"
+                          required
+                        />
+                      </label>
 
-                    {/* CREATE MAILBOX */}
+                      {/* AUTH ERROR */}
+
+                      {authError && (
+                        <div className="auth-error">
+                          <span>
+                            !
+                          </span>
+
+                          <span>
+                            {
+                              authError
+                            }
+                          </span>
+                        </div>
+                      )}
+
+                      {/* CREATE MAILBOX */}
+
+                      <button
+                        className="auth-submit"
+                        type="submit"
+                        disabled={
+                          authSubmitting ||
+                          signupBlocked
+                        }
+                      >
+                        <span>
+                          {authSubmitting
+                            ? "Creating mailbox..."
+                            : "Create mailbox"}
+                        </span>
+
+                        {!authSubmitting && (
+                          <span className="submit-arrow">
+                            →
+                          </span>
+                        )}
+                      </button>
+                    </form>
 
                     <button
-                      className="auth-submit"
-                      type="submit"
-                      disabled={
-                        authSubmitting ||
-                        signupBlocked
+                      type="button"
+                      className="invite-change-button"
+                      onClick={
+                        resetInvite
                       }
                     >
-                      <span>
-                        {authSubmitting
-                          ? "Creating mailbox..."
-                          : "Create mailbox"}
-                      </span>
-
-                      {!authSubmitting && (
-                        <span className="submit-arrow">
-                          →
-                        </span>
-                      )}
+                      Use a different
+                      invitation code
                     </button>
-                  </form>
+                  </div>
+                )}
+              </>
+            )}
 
-                  <button
-                    type="button"
-                    className="invite-change-button"
-                    onClick={
-                      resetInvite
-                    }
-                  >
-                    Use a different
-                    invitation code
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+            {/* ================================================= */}
+            {/* AUTH MODE SWITCH */}
+            {/* ================================================= */}
 
-          {/* ================================================= */}
-          {/* AUTH MODE SWITCH */}
-          {/* ================================================= */}
+            <div className="auth-switch">
+              <span>
+                {isSignIn
+                  ? "Don't have an account?"
+                  : "Already have an account?"}
+              </span>
 
-          <div className="auth-switch">
+              <button
+                type="button"
+                onClick={
+                  toggleAuthMode
+                }
+              >
+                {isSignIn
+                  ? "Create one"
+                  : "Sign in"}
+              </button>
+            </div>
+          </div>
+
+          {/* ================================================== */}
+          {/* FOOTER */}
+          {/* ================================================== */}
+
+          <div className="auth-footer">
             <span>
-              {isSignIn
-                ? "Don't have an account?"
-                : "Already have an account?"}
+              Fades Mail
             </span>
 
-            <button
-              type="button"
-              onClick={
-                toggleAuthMode
-              }
-            >
-              {isSignIn
-                ? "Create one"
-                : "Sign in"}
-            </button>
+            <span>•</span>
+
+            <span>
+              fades.lol
+            </span>
+
+            <span>•</span>
+
+            <span>
+              Private by design
+            </span>
           </div>
         </div>
-
-        {/* ================================================== */}
-        {/* FOOTER */}
-        {/* ================================================== */}
-
-        <div className="auth-footer">
-          <span>
-            Fades Mail
-          </span>
-
-          <span>•</span>
-
-          <span>
-            fades.lol
-          </span>
-
-          <span>•</span>
-
-          <span>
-            Private by design
-          </span>
-        </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
