@@ -23,7 +23,9 @@ export default function MessageView({
   onCompose,
 }) {
   const inTrash = resolvedActiveFolder === "trash";
+
   const htmlBody = message.bodyHtml || message.body_html;
+
   const attachments = Array.isArray(message.attachments)
     ? message.attachments
     : [];
@@ -113,7 +115,9 @@ export default function MessageView({
         <div className="message-header">
           <div className="message-title-row">
             <div>
-              <div className="message-kicker">{folderName || "Message"}</div>
+              <div className="message-kicker">
+                {folderName || "Message"}
+              </div>
 
               <h1>{message.subject || "(No subject)"}</h1>
             </div>
@@ -128,7 +132,9 @@ export default function MessageView({
                 {getSenderName(message.sender, message.senderName)}
 
                 {isBimiVerified && (
-                  <VerifiedBadge domain={getSenderDomain(message.sender)} />
+                  <VerifiedBadge
+                    domain={getSenderDomain(message.sender)}
+                  />
                 )}
               </strong>
 
@@ -171,33 +177,158 @@ export default function MessageView({
 
         {attachments.length > 0 && (
           <div className="message-attachments">
-            <span className="message-attachments-label">Attachments</span>
+            <span className="message-attachments-label">
+              {attachments.length === 1
+                ? "Attachment"
+                : `${attachments.length} Attachments`}
+            </span>
 
             <div className="message-attachments-list">
-              {attachments.map((attachment, index) => (
-                <a
-                  key={attachment.id || `${attachment.name}-${index}`}
-                  className="message-attachment"
-                  href={attachment.url || attachment.data || "#"}
-                  download={attachment.name}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Icon name="attachment" size={15} />
+              {attachments.map((attachment, index) => {
+                const name =
+                  attachment.name ||
+                  attachment.filename ||
+                  attachment.fileName ||
+                  `Attachment ${index + 1}`;
 
-                  <span>{attachment.name || "Attachment"}</span>
+                const url =
+                  attachment.url ||
+                  attachment.downloadUrl ||
+                  attachment.download_url ||
+                  attachment.storageUrl ||
+                  attachment.storage_url ||
+                  attachment.data ||
+                  attachment.content;
 
-                  {attachment.size ? (
-                    <em>{formatFileSize(attachment.size)}</em>
-                  ) : null}
-                </a>
-              ))}
+                const size =
+                  attachment.size ||
+                  attachment.fileSize ||
+                  attachment.file_size ||
+                  0;
+
+                const mimeType = (
+                  attachment.mimeType ||
+                  attachment.mime_type ||
+                  ""
+                ).toLowerCase();
+
+                /*
+                 * Detect images using both the MIME type and
+                 * the filename extension.
+                 */
+                const isImage =
+                  mimeType.startsWith("image/") ||
+                  /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+
+                /*
+                 * If the API returns raw base64 instead of a complete
+                 * data URL, convert it into a browser-readable URL.
+                 */
+                let attachmentUrl = url;
+
+                if (
+                  attachmentUrl &&
+                  !attachmentUrl.startsWith("http") &&
+                  !attachmentUrl.startsWith("/") &&
+                  !attachmentUrl.startsWith("data:")
+                ) {
+                  attachmentUrl = `data:${
+                    mimeType || "application/octet-stream"
+                  };base64,${attachmentUrl}`;
+                }
+
+                /*
+                 * Image attachment
+                 */
+                if (isImage && attachmentUrl) {
+                  return (
+                    <div
+                      key={
+                        attachment.id ||
+                        attachment.attachmentId ||
+                        `${name}-${index}`
+                      }
+                      className="message-attachment message-attachment-image"
+                    >
+                      <a
+                        href={attachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="message-image-link"
+                      >
+                        <img
+                          src={attachmentUrl}
+                          alt={name}
+                          className="message-attachment-preview"
+                          loading="lazy"
+                        />
+                      </a>
+
+                      <div className="message-attachment-info">
+                        <Icon name="attachment" size={15} />
+
+                        <span className="message-attachment-name">
+                          {name}
+                        </span>
+
+                        {size > 0 && (
+                          <em>{formatFileSize(size)}</em>
+                        )}
+
+                        <a
+                          href={attachmentUrl}
+                          download={name}
+                          className="message-attachment-download"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  );
+                }
+
+                /*
+                 * Normal non-image attachment
+                 */
+                return (
+                  <a
+                    key={
+                      attachment.id ||
+                      attachment.attachmentId ||
+                      `${name}-${index}`
+                    }
+                    className="message-attachment message-attachment-file"
+                    href={attachmentUrl || "#"}
+                    download={name}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(event) => {
+                      if (!attachmentUrl) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
+                    <Icon name="attachment" size={15} />
+
+                    <span className="message-attachment-name">
+                      {name}
+                    </span>
+
+                    {size > 0 && (
+                      <em>{formatFileSize(size)}</em>
+                    )}
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}
 
         <div className="message-reply">
-          <button type="button" onClick={() => onCompose(buildReply(message))}>
+          <button
+            type="button"
+            onClick={() => onCompose(buildReply(message))}
+          >
             <Icon name="reply" size={17} />
 
             Reply
@@ -205,7 +336,9 @@ export default function MessageView({
 
           <button
             type="button"
-            onClick={() => onCompose(buildReplyAll(message, mailbox?.email))}
+            onClick={() =>
+              onCompose(buildReplyAll(message, mailbox?.email))
+            }
           >
             <Icon name="replyAll" size={17} />
 
@@ -221,8 +354,14 @@ export default function MessageView({
             Forward
           </button>
 
-          <button type="button" onClick={() => onToggleRead(message)}>
-            <Icon name={message.isRead ? "mail" : "check"} size={17} />
+          <button
+            type="button"
+            onClick={() => onToggleRead(message)}
+          >
+            <Icon
+              name={message.isRead ? "mail" : "check"}
+              size={17}
+            />
 
             {message.isRead ? "Mark unread" : "Mark read"}
           </button>
